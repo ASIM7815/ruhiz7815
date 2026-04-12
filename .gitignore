@@ -38,4 +38,13 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# credentials / service account keys
+GOOGLE.json
+ruhiz-490414-9c8203239501.json
+
+# local dev database
+prisma/dev.db
 next-env.d.ts
+
+/src/generated/prisma

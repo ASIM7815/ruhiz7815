@@ -1,0 +1,302 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  uid                String?   @unique
+  name               String
+  email              String    @unique
+  emailVerified      DateTime?
+  password           String?
+  image              String?
+  bio                String?
+  university         String?
+  role               String    @default("MEMBER") // LEADER, MEMBER, BOTH
+  reputation         Int       @default(0)
+  publicKey          String?
+  onboardingComplete Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  skills        UserSkill[]
+  interests     UserInterest[]
+
+  ownedProjects    Project[]      @relation("ProjectOwner")
+  projectMembers   ProjectMember[]
+  sentMessages     Message[]      @relation("MessageSender")
+  notifications    Notification[]
+  resources        Resource[]
+  listings         Listing[]
+  startups         Startup[]
+  studyGroupMembers StudyGroupMember[]
+
+  conversations      ConversationParticipant[]
+  directMessagesSent DirectMessage[]   @relation("DirectMessageSender")
+  messageReactions   MessageReaction[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model UserSkill {
+  id     String @id @default(cuid())
+  userId String
+  skill  String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skill])
+}
+
+model UserInterest {
+  id       String @id @default(cuid())
+  userId   String
+  interest String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interest])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  title       String
+  problem     String
+  description String
+  status      String   @default("OPEN") // OPEN, IN_PROGRESS, COMPLETED
+  timeline    String?
+  maxMembers  Int      @default(4)
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members ProjectMember[]
+  skills  ProjectSkill[]
+  tasks   Task[]
+  messages Message[]
+}
+
+model ProjectSkill {
+  id        String @id @default(cuid())
+  projectId String
+  skill     String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, skill])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("MEMBER") // LEADER, MEMBER
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  status      String   @default("TODO") // TODO, IN_PROGRESS, DONE
+  assigneeId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  senderId  String
+  projectId String?
+  createdAt DateTime @default(now())
+
+  sender  User     @relation("MessageSender", fields: [senderId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Resource {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        String   // NOTES, PAPER, MATERIAL
+  fileUrl     String?
+  university  String?
+  rating      Float    @default(0)
+  downloads   Int      @default(0)
+  authorId    String
+  createdAt   DateTime @default(now())
+
+  author User @relation(fields: [authorId], references: [id])
+}
+
+model StudyGroup {
+  id          String   @id @default(cuid())
+  name        String
+  subject     String
+  description String?
+  maxMembers  Int      @default(10)
+  createdAt   DateTime @default(now())
+
+  members StudyGroupMember[]
+}
+
+model StudyGroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String   @default("MEMBER")
+  joinedAt  DateTime @default(now())
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+}
+
+model Listing {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  price       Float
+  category    String   // BOOK, GADGET, SERVICE
+  condition   String?  // NEW, LIKE_NEW, GOOD, FAIR
+  imageUrl    String?
+  sellerId    String
+  sold        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  seller User @relation(fields: [sellerId], references: [id])
+}
+
+model Startup {
+  id          String   @id @default(cuid())
+  name        String
+  problem     String
+  solution    String
+  stage       String   @default("IDEA") // IDEA, VALIDATION, BUILDING
+  lookingFor  String?
+  founderId   String
+  createdAt   DateTime @default(now())
+
+  founder User @relation(fields: [founderId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // TEAM_INVITE, PROJECT_UPDATE, MESSAGE, REPUTATION, etc.
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── E2EE Direct Messaging ──────────────────────────────────────────
+
+model Conversation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages     DirectMessage[]
+}
+
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+model DirectMessage {
+  id                    String   @id @default(cuid())
+  conversationId        String
+  senderId              String
+  encryptedContent      String
+  encryptedKeySender    String
+  encryptedKeyRecipient String
+  iv                    String
+  isRead                Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("DirectMessageSender", fields: [senderId], references: [id])
+  reactions    MessageReaction[]
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+}

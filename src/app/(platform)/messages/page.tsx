@@ -101,24 +101,11 @@ const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 // ── Component ──────────────────────────────────────────────────────
 
-export default function MessagesPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex h-full items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      }
-    >
-      <MessagesContent />
-    </Suspense>
-  );
-}
-
-function MessagesContent() {
+function MessagesPageContent() {
   const { data: session } = useSession();
   const userId = session?.user?.id;
   const searchParams = useSearchParams();
+  const initialConversation = searchParams.get("conversation");
 
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -130,24 +117,19 @@ function MessagesContent() {
   const [messages, setMessages] = useState<MessageData[]>([]);
   const [messageInput, setMessageInput] = useState("");
   const [loading, setLoading] = useState(true);
-  const [sendingMessage, setSendingMessage] = useState(false);
+  const [_sendingMessage, _setSendingMessage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [showMobileChat, setShowMobileChat] = useState(false);
-  const [loadingOlder, setLoadingOlder] = useState(false);
-  const [hasMoreMessages, setHasMoreMessages] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const lastPollTimestamp = useRef<string>(new Date(0).toISOString());
-  const oldestCursor = useRef<string | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const convPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
-  const initialChatHandled = useRef(false);
 
   // ── Fetch conversations ────────────────────────────────────────
 
@@ -168,45 +150,19 @@ function MessagesContent() {
   const fetchMessages = useCallback(async (conversationId: string) => {
     try {
       const res = await fetch(
-        `/api/messages/conversations/${conversationId}?take=30`
+        `/api/messages/conversations/${conversationId}`
       );
       if (res.ok) {
         const data = await res.json();
         // Messages come in desc order, reverse for display
-        const reversed = data.messages.reverse();
-        setMessages(reversed);
+        setMessages(data.messages.reverse());
         setSelectedParticipant(data.participant);
-        setHasMoreMessages(!!data.nextCursor);
-        oldestCursor.current = data.nextCursor;
         lastPollTimestamp.current = new Date().toISOString();
       }
     } catch {
       // silently fail
     }
   }, []);
-
-  // ── Load older messages on scroll up ───────────────────────────
-
-  const loadOlderMessages = useCallback(async () => {
-    if (!selectedConversation || !oldestCursor.current || loadingOlder) return;
-    setLoadingOlder(true);
-    try {
-      const res = await fetch(
-        `/api/messages/conversations/${selectedConversation}?cursor=${oldestCursor.current}&take=30`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const olderMsgs = data.messages.reverse();
-        setMessages((prev) => [...olderMsgs, ...prev]);
-        setHasMoreMessages(!!data.nextCursor);
-        oldestCursor.current = data.nextCursor;
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoadingOlder(false);
-    }
-  }, [selectedConversation, loadingOlder]);
 
   // ── Poll for new messages ──────────────────────────────────────
 
@@ -246,11 +202,24 @@ function MessagesContent() {
     fetchConversations().finally(() => setLoading(false));
   }, [userId, fetchConversations]);
 
-  // ── Poll conversations (every 3s) ─────────────────────────────
+  // ── Auto-open conversation from URL param ─────────────────────
+
+  const didAutoOpen = useRef(false);
+  useEffect(() => {
+    if (!initialConversation || didAutoOpen.current || loading) return;
+    didAutoOpen.current = true;
+    setSelectedConversation(initialConversation);
+    setShowMobileChat(true);
+    lastPollTimestamp.current = new Date(0).toISOString();
+    fetchMessages(initialConversation);
+    fetch(`/api/messages/${initialConversation}/read`, { method: "PATCH" });
+  }, [initialConversation, loading, fetchMessages]);
+
+  // ── Poll conversations (every 2s) ─────────────────────────────
 
   useEffect(() => {
     if (!userId) return;
-    convPollIntervalRef.current = setInterval(fetchConversations, 3000);
+    convPollIntervalRef.current = setInterval(fetchConversations, 2000);
     return () => {
       if (convPollIntervalRef.current)
         clearInterval(convPollIntervalRef.current);
@@ -269,29 +238,11 @@ function MessagesContent() {
     };
   }, [selectedConversation, pollMessages]);
 
-  // ── Auto-scroll to bottom (only if near bottom) ────────────────
-
-  const isNearBottom = useRef(true);
+  // ── Auto-scroll to bottom ─────────────────────────────────────
 
   useEffect(() => {
-    if (isNearBottom.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // ── Handle ?chat= URL param ────────────────────────────────────
-
-  useEffect(() => {
-    if (!userId || initialChatHandled.current) return;
-    const chatId = searchParams.get("chat");
-    if (chatId) {
-      initialChatHandled.current = true;
-      setSelectedConversation(chatId);
-      setShowMobileChat(true);
-      lastPollTimestamp.current = new Date(0).toISOString();
-      fetchMessages(chatId);
-    }
-  }, [userId, searchParams, fetchMessages]);
 
   // ── Select conversation ────────────────────────────────────────
 
@@ -312,13 +263,12 @@ function MessagesContent() {
   // ── Send message ───────────────────────────────────────────────
 
   const sendMessage = useCallback(async () => {
-    if (!messageInput.trim() || !selectedConversation || sendingMessage) return;
+    if (!messageInput.trim() || !selectedConversation) return;
 
     const content = messageInput.trim();
     setMessageInput("");
-    setSendingMessage(true);
 
-    // Optimistic update
+    // Optimistic update — shows immediately with single tick
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg: MessageData = {
       id: tempId,
@@ -330,38 +280,33 @@ function MessagesContent() {
     };
     setMessages((prev) => [...prev, optimisticMsg]);
 
-    try {
-      const res = await fetch("/api/messages/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversationId: selectedConversation,
-          content,
-        }),
-      });
-
-      if (res.ok) {
-        const saved = await res.json();
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? { ...saved, reactions: [] } : m))
-        );
-        lastPollTimestamp.current = new Date().toISOString();
-        fetchConversations();
-      } else {
+    // Fire and forget — no loading state, message already visible
+    fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId: selectedConversation,
+        content,
+      }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          return res.json().then((saved) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === tempId ? { ...saved, reactions: [] } : m
+              )
+            );
+            fetchConversations();
+          });
+        } else {
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        }
+      })
+      .catch(() => {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      }
-    } catch {
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-    } finally {
-      setSendingMessage(false);
-    }
-  }, [
-    messageInput,
-    selectedConversation,
-    sendingMessage,
-    userId,
-    fetchConversations,
-  ]);
+      });
+  }, [messageInput, selectedConversation, userId, fetchConversations]);
 
   // ── Search users by UID ────────────────────────────────────────
 
@@ -706,48 +651,8 @@ function MessagesContent() {
               </div>
 
               {/* Messages */}
-              <div
-                ref={scrollAreaRef}
-                className="flex-1 overflow-y-auto p-4"
-                onScroll={(e) => {
-                  const el = e.currentTarget;
-                  // Track if user is near bottom for auto-scroll
-                  isNearBottom.current =
-                    el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-                  // Load older messages when scrolled to top
-                  if (el.scrollTop < 50 && hasMoreMessages && !loadingOlder) {
-                    const prevHeight = el.scrollHeight;
-                    loadOlderMessages().then(() => {
-                      // Maintain scroll position after prepending
-                      requestAnimationFrame(() => {
-                        el.scrollTop = el.scrollHeight - prevHeight;
-                      });
-                    });
-                  }
-                }}
-              >
+              <ScrollArea className="flex-1 p-4">
                 <div className="space-y-3">
-                  {loadingOlder && (
-                    <div className="flex justify-center py-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    </div>
-                  )}
-                  {hasMoreMessages && !loadingOlder && (
-                    <button
-                      onClick={() => {
-                        const el = scrollAreaRef.current;
-                        const prevHeight = el?.scrollHeight || 0;
-                        loadOlderMessages().then(() => {
-                          requestAnimationFrame(() => {
-                            if (el) el.scrollTop = el.scrollHeight - prevHeight;
-                          });
-                        });
-                      }}
-                      className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-2"
-                    >
-                      Load older messages
-                    </button>
-                  )}
                   {messages.map((msg, idx) => {
                     const isOwn = msg.senderId === userId;
                     const showAvatar =
@@ -886,7 +791,7 @@ function MessagesContent() {
                   })}
                   <div ref={messagesEndRef} />
                 </div>
-              </div>
+              </ScrollArea>
 
               {/* Message Input */}
               <div className="p-4 border-t border-border">
@@ -898,19 +803,15 @@ function MessagesContent() {
                     onKeyDown={handleKeyDown}
                     className="flex-1"
                     maxLength={5000}
-                    disabled={sendingMessage}
+
                   />
                   <Tooltip>
                     <TooltipTrigger
                       className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium h-9 w-9 bg-primary text-primary-foreground hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
                       onClick={sendMessage}
-                      disabled={!messageInput.trim() || sendingMessage}
+                      disabled={!messageInput.trim()}
                     >
-                      {sendingMessage ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
+                      <Send className="h-4 w-4" />
                     </TooltipTrigger>
                     <TooltipContent>Send message</TooltipContent>
                   </Tooltip>
@@ -933,5 +834,13 @@ function MessagesContent() {
         </div>
       </div>
     </TooltipProvider>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense>
+      <MessagesPageContent />
+    </Suspense>
   );
 }

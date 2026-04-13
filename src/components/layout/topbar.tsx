@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Search, Bell, MessageSquarePlus } from "lucide-react";
+import { Search, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -80,57 +80,28 @@ export function Topbar() {
             {searching ? (
               <p className="text-sm text-muted-foreground p-2">Searching...</p>
             ) : searchResult ? (
-              <div className="p-1 space-y-1">
-                <button
-                  className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-muted transition-colors text-left"
-                  onClick={() => {
-                    router.push(`/students/${searchResult.uid}`);
-                    setShowResult(false);
-                    setSearchUid("");
-                  }}
-                >
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={searchResult.image || ""} />
-                    <AvatarFallback>
-                      {searchResult.name?.charAt(0)?.toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{searchResult.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      #{searchResult.uid}
-                      {searchResult.university ? ` · ${searchResult.university}` : ""}
-                    </p>
-                  </div>
-                </button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={async () => {
-                    setShowResult(false);
-                    setSearchUid("");
-                    try {
-                      const res = await fetch("/api/messages/conversations", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ targetUserId: searchResult.id }),
-                      });
-                      if (res.ok) {
-                        const data = await res.json();
-                        router.push(`/messages?chat=${data.conversationId}`);
-                      } else {
-                        router.push("/messages");
-                      }
-                    } catch {
-                      router.push("/messages");
-                    }
-                  }}
-                >
-                  <MessageSquarePlus className="h-3.5 w-3.5" />
-                  Message
-                </Button>
-              </div>
+              <button
+                className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-muted transition-colors text-left"
+                onClick={() => {
+                  router.push(`/students/${searchResult.uid}`);
+                  setShowResult(false);
+                  setSearchUid("");
+                }}
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={searchResult.image || ""} />
+                  <AvatarFallback>
+                    {searchResult.name?.charAt(0)?.toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-sm font-medium">{searchResult.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    #{searchResult.uid}
+                    {searchResult.university ? ` · ${searchResult.university}` : ""}
+                  </p>
+                </div>
+              </button>
             ) : (
               <p className="text-sm text-muted-foreground p-2">No user found</p>
             )}

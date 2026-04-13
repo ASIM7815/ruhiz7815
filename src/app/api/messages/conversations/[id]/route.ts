@@ -27,8 +27,7 @@ export async function GET(
   }
 
   const cursor = req.nextUrl.searchParams.get("cursor");
-  const takeParam = req.nextUrl.searchParams.get("take");
-  const take = Math.min(Math.max(parseInt(takeParam || "50", 10) || 50, 1), 100);
+  const take = 50;
 
   const messages = await db.directMessage.findMany({
     where: { conversationId },

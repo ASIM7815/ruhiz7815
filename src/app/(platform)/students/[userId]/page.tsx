@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, GraduationCap, Star } from "lucide-react";
+import { ArrowLeft, GraduationCap, MessageSquare, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,9 +23,11 @@ interface PublicUser {
 
 export default function PublicProfilePage() {
   const { userId } = useParams<{ userId: string }>();
+  const router = useRouter();
   const [user, setUser] = useState<PublicUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [messaging, setMessaging] = useState(false);
 
   useEffect(() => {
     fetch(`/api/users/search?uid=${userId}`)
@@ -111,8 +113,33 @@ export default function PublicProfilePage() {
                 ))}
               </div>
             )}
-            <Button variant="outline" disabled className="mt-4">
-              Message (Coming soon)
+            <Button
+              variant="outline"
+              className="mt-4 gap-2"
+              disabled={messaging}
+              onClick={async () => {
+                setMessaging(true);
+                try {
+                  const res = await fetch("/api/messages/conversations", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ targetUserId: user.id }),
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    router.push(`/messages?chat=${data.conversationId}`);
+                  } else {
+                    router.push("/messages");
+                  }
+                } catch {
+                  router.push("/messages");
+                } finally {
+                  setMessaging(false);
+                }
+              }}
+            >
+              <MessageSquare className="h-4 w-4" />
+              {messaging ? "Opening..." : "Message"}
             </Button>
           </div>
         </CardContent>

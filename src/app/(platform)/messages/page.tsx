@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   Send,
@@ -101,8 +102,23 @@ const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 // ── Component ──────────────────────────────────────────────────────
 
 export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <MessagesContent />
+    </Suspense>
+  );
+}
+
+function MessagesContent() {
   const { data: session } = useSession();
   const userId = session?.user?.id;
+  const searchParams = useSearchParams();
 
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -120,13 +136,18 @@ export default function MessagesPage() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const lastPollTimestamp = useRef<string>(new Date(0).toISOString());
+  const oldestCursor = useRef<string | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const convPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
+  const initialChatHandled = useRef(false);
 
   // ── Fetch conversations ────────────────────────────────────────
 
@@ -147,19 +168,45 @@ export default function MessagesPage() {
   const fetchMessages = useCallback(async (conversationId: string) => {
     try {
       const res = await fetch(
-        `/api/messages/conversations/${conversationId}`
+        `/api/messages/conversations/${conversationId}?take=30`
       );
       if (res.ok) {
         const data = await res.json();
         // Messages come in desc order, reverse for display
-        setMessages(data.messages.reverse());
+        const reversed = data.messages.reverse();
+        setMessages(reversed);
         setSelectedParticipant(data.participant);
+        setHasMoreMessages(!!data.nextCursor);
+        oldestCursor.current = data.nextCursor;
         lastPollTimestamp.current = new Date().toISOString();
       }
     } catch {
       // silently fail
     }
   }, []);
+
+  // ── Load older messages on scroll up ───────────────────────────
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!selectedConversation || !oldestCursor.current || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const res = await fetch(
+        `/api/messages/conversations/${selectedConversation}?cursor=${oldestCursor.current}&take=30`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const olderMsgs = data.messages.reverse();
+        setMessages((prev) => [...olderMsgs, ...prev]);
+        setHasMoreMessages(!!data.nextCursor);
+        oldestCursor.current = data.nextCursor;
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [selectedConversation, loadingOlder]);
 
   // ── Poll for new messages ──────────────────────────────────────
 
@@ -199,34 +246,52 @@ export default function MessagesPage() {
     fetchConversations().finally(() => setLoading(false));
   }, [userId, fetchConversations]);
 
-  // ── Poll conversations (every 5s) ─────────────────────────────
+  // ── Poll conversations (every 3s) ─────────────────────────────
 
   useEffect(() => {
     if (!userId) return;
-    convPollIntervalRef.current = setInterval(fetchConversations, 5000);
+    convPollIntervalRef.current = setInterval(fetchConversations, 3000);
     return () => {
       if (convPollIntervalRef.current)
         clearInterval(convPollIntervalRef.current);
     };
   }, [userId, fetchConversations]);
 
-  // ── Poll messages (every 3s when a conversation is selected) ──
+  // ── Poll messages (every 1s when a conversation is selected) ──
 
   useEffect(() => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     if (!selectedConversation) return;
 
-    pollIntervalRef.current = setInterval(pollMessages, 3000);
+    pollIntervalRef.current = setInterval(pollMessages, 1000);
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, [selectedConversation, pollMessages]);
 
-  // ── Auto-scroll to bottom ─────────────────────────────────────
+  // ── Auto-scroll to bottom (only if near bottom) ────────────────
+
+  const isNearBottom = useRef(true);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottom.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
+
+  // ── Handle ?chat= URL param ────────────────────────────────────
+
+  useEffect(() => {
+    if (!userId || initialChatHandled.current) return;
+    const chatId = searchParams.get("chat");
+    if (chatId) {
+      initialChatHandled.current = true;
+      setSelectedConversation(chatId);
+      setShowMobileChat(true);
+      lastPollTimestamp.current = new Date(0).toISOString();
+      fetchMessages(chatId);
+    }
+  }, [userId, searchParams, fetchMessages]);
 
   // ── Select conversation ────────────────────────────────────────
 
@@ -280,6 +345,7 @@ export default function MessagesPage() {
         setMessages((prev) =>
           prev.map((m) => (m.id === tempId ? { ...saved, reactions: [] } : m))
         );
+        lastPollTimestamp.current = new Date().toISOString();
         fetchConversations();
       } else {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
@@ -640,8 +706,48 @@ export default function MessagesPage() {
               </div>
 
               {/* Messages */}
-              <ScrollArea className="flex-1 p-4">
+              <div
+                ref={scrollAreaRef}
+                className="flex-1 overflow-y-auto p-4"
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  // Track if user is near bottom for auto-scroll
+                  isNearBottom.current =
+                    el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+                  // Load older messages when scrolled to top
+                  if (el.scrollTop < 50 && hasMoreMessages && !loadingOlder) {
+                    const prevHeight = el.scrollHeight;
+                    loadOlderMessages().then(() => {
+                      // Maintain scroll position after prepending
+                      requestAnimationFrame(() => {
+                        el.scrollTop = el.scrollHeight - prevHeight;
+                      });
+                    });
+                  }
+                }}
+              >
                 <div className="space-y-3">
+                  {loadingOlder && (
+                    <div className="flex justify-center py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  {hasMoreMessages && !loadingOlder && (
+                    <button
+                      onClick={() => {
+                        const el = scrollAreaRef.current;
+                        const prevHeight = el?.scrollHeight || 0;
+                        loadOlderMessages().then(() => {
+                          requestAnimationFrame(() => {
+                            if (el) el.scrollTop = el.scrollHeight - prevHeight;
+                          });
+                        });
+                      }}
+                      className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-2"
+                    >
+                      Load older messages
+                    </button>
+                  )}
                   {messages.map((msg, idx) => {
                     const isOwn = msg.senderId === userId;
                     const showAvatar =
@@ -780,7 +886,7 @@ export default function MessagesPage() {
                   })}
                   <div ref={messagesEndRef} />
                 </div>
-              </ScrollArea>
+              </div>
 
               {/* Message Input */}
               <div className="p-4 border-t border-border">

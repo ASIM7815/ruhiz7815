@@ -1,9 +1,10 @@
 import { Storage } from "@google-cloud/storage";
 import path from "path";
 
-const storage = new Storage({
-  keyFilename: path.join(process.cwd(), "ruhiz-490414-9c8203239501.json"),
-});
+const credentialsEnv = process.env.GCS_CREDENTIALS;
+const storage = credentialsEnv
+  ? new Storage({ credentials: JSON.parse(credentialsEnv) })
+  : new Storage({ keyFilename: path.join(process.cwd(), "ruhiz-490414-9c8203239501.json") });
 
 const bucket = storage.bucket(process.env.GCS_BUCKET_NAME || "ruhiz");
 

@@ -143,31 +143,27 @@ export default function KnowledgeHubPage() {
   async function handleView(id: string) {
     const url = await getFileUrl(id);
     if (!url) return;
-    const a = document.createElement("a");
-    a.href = url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function handleDownload(id: string, title: string) {
     const url = await getFileUrl(id);
     if (!url) return;
-    // Fetch the file through our server so we can force a download header
-    const res = await fetch(`/api/resources/${id}/download?dl=1`);
-    if (!res.ok) return;
-    const { url: fileUrl } = await res.json();
-    if (!fileUrl) return;
-    const a = document.createElement("a");
-    a.href = fileUrl;
-    a.download = title;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = title;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      // Fallback: just open in new tab
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   }
 
   return (

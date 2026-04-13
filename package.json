@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:server": "npx tsx server.ts",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "node --import tsx server.ts",
     "lint": "eslint"
   },

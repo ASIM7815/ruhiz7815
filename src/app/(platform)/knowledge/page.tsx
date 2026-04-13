@@ -280,28 +280,28 @@ export default function KnowledgeHubPage() {
                         {resource.author.name}
                       </span>
                     </div>
-                    {resource.fileUrl && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleView(resource.id)}
-                          title="Open in browser"
-                        >
-                          <Eye className="mr-1 h-3 w-3" />
-                          View
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDownload(resource.id, resource.title)}
-                          title="Download file"
-                        >
-                          <Download className="mr-1 h-3 w-3" />
-                          Download
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleView(resource.id)}
+                        title="Open in browser"
+                        disabled={!resource.fileUrl}
+                      >
+                        <Eye className="mr-1 h-3 w-3" />
+                        View
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDownload(resource.id, resource.title)}
+                        title="Download file"
+                        disabled={!resource.fileUrl}
+                      >
+                        <Download className="mr-1 h-3 w-3" />
+                        Download
+                      </Button>
+                    </div>
                   </div>
                 </CardFooter>
               </Card>

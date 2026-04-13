@@ -24,7 +24,6 @@ model User {
   university         String?
   role               String    @default("MEMBER") // LEADER, MEMBER, BOTH
   reputation         Int       @default(0)
-  publicKey          String?
   onboardingComplete Boolean   @default(false)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -249,7 +248,7 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ── E2EE Direct Messaging ──────────────────────────────────────────
+// ── Direct Messaging ───────────────────────────────────────────────
 
 model Conversation {
   id        String   @id @default(cuid())
@@ -273,15 +272,12 @@ model ConversationParticipant {
 }
 
 model DirectMessage {
-  id                    String   @id @default(cuid())
-  conversationId        String
-  senderId              String
-  encryptedContent      String
-  encryptedKeySender    String
-  encryptedKeyRecipient String
-  iv                    String
-  isRead                Boolean  @default(false)
-  createdAt             DateTime @default(now())
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation("DirectMessageSender", fields: [senderId], references: [id])

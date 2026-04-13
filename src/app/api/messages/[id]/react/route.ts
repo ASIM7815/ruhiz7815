@@ -1,41 +1,33 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-let getIO: (() => import("socket.io").Server) | null = null;
-try {
-  getIO = require("@/lib/socket-server").getIO;
-} catch {
-  // Socket.io not available
-}
-
-// POST /api/messages/[id]/react — add a reaction
+// POST /api/messages/[id]/react — add emoji reaction
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id: messageId } = await params;
   const userId = session.user.id;
-  const body = await req.json();
-  const { emoji } = body;
+  const { emoji } = await req.json();
 
   if (!emoji || typeof emoji !== "string") {
-    return NextResponse.json({ error: "Emoji required" }, { status: 400 });
+    return Response.json({ error: "emoji is required" }, { status: 400 });
   }
 
-  // Verify message exists and user is a participant
+  // Verify message exists and user has access
   const message = await db.directMessage.findUnique({
     where: { id: messageId },
     select: { conversationId: true },
   });
 
   if (!message) {
-    return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    return Response.json({ error: "Message not found" }, { status: 404 });
   }
 
   const participant = await db.conversationParticipant.findUnique({
@@ -48,80 +40,52 @@ export async function POST(
   });
 
   if (!participant) {
-    return NextResponse.json({ error: "Not a participant" }, { status: 403 });
+    return Response.json({ error: "Not a participant" }, { status: 403 });
   }
 
-  // Upsert reaction (unique: messageId + userId + emoji)
-  const reaction = await db.messageReaction.upsert({
-    where: {
-      messageId_userId_emoji: { messageId, userId, emoji },
-    },
-    create: { messageId, userId, emoji },
-    update: {},
+  // Upsert reaction
+  const existing = await db.messageReaction.findFirst({
+    where: { messageId, userId, emoji },
   });
 
-  // Emit via Socket.io
-  if (getIO) {
-    try {
-      const io = getIO();
-      io.to(`conversation-${message.conversationId}`).emit("reaction-update", {
-        messageId,
-        reaction: { id: reaction.id, userId, emoji },
-        action: "add",
-      });
-    } catch {
-      // Socket.io emit failed
-    }
+  if (existing) {
+    return Response.json(existing);
   }
 
-  return NextResponse.json({ ok: true, reaction });
+  const reaction = await db.messageReaction.create({
+    data: { messageId, userId, emoji },
+  });
+
+  return Response.json(reaction, { status: 201 });
 }
 
-// DELETE /api/messages/[id]/react — remove a reaction
+// DELETE /api/messages/[id]/react — remove emoji reaction
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id: messageId } = await params;
   const userId = session.user.id;
   const { emoji } = await req.json();
 
-  if (!emoji) {
-    return NextResponse.json({ error: "Emoji required" }, { status: 400 });
+  if (!emoji || typeof emoji !== "string") {
+    return Response.json({ error: "emoji is required" }, { status: 400 });
   }
 
-  // Verify message exists
-  const message = await db.directMessage.findUnique({
-    where: { id: messageId },
-    select: { conversationId: true },
-  });
-
-  if (!message) {
-    return NextResponse.json({ error: "Message not found" }, { status: 404 });
-  }
-
-  await db.messageReaction.deleteMany({
+  const reaction = await db.messageReaction.findFirst({
     where: { messageId, userId, emoji },
   });
 
-  // Emit via Socket.io
-  if (getIO) {
-    try {
-      const io = getIO();
-      io.to(`conversation-${message.conversationId}`).emit("reaction-update", {
-        messageId,
-        reaction: { userId, emoji },
-        action: "remove",
-      });
-    } catch {
-      // Socket.io emit failed
-    }
+  if (!reaction) {
+    return Response.json({ error: "Reaction not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true });
+  await db.messageReaction.delete({ where: { id: reaction.id } });
+
+  return Response.json({ deleted: true });
 }

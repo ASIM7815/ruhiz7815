@@ -1,25 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-// GET /api/messages/conversations — list all conversations for current user
+// GET /api/messages/conversations — list all conversations for the current user
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const userId = session.user.id;
 
-  const participantRows = await db.conversationParticipant.findMany({
+  const participations = await db.conversationParticipant.findMany({
     where: { userId },
     select: { conversationId: true },
   });
 
-  const conversationIds = participantRows.map((p) => p.conversationId);
+  const conversationIds = participations.map((p) => p.conversationId);
 
   if (conversationIds.length === 0) {
-    return NextResponse.json({ conversations: [] });
+    return Response.json([]);
   }
 
   const conversations = await db.conversation.findMany({
@@ -42,11 +42,8 @@ export async function GET() {
         take: 1,
         select: {
           id: true,
+          content: true,
           senderId: true,
-          encryptedContent: true,
-          encryptedKeySender: true,
-          encryptedKeyRecipient: true,
-          iv: true,
           isRead: true,
           createdAt: true,
         },
@@ -55,102 +52,85 @@ export async function GET() {
     orderBy: { updatedAt: "desc" },
   });
 
-  // Count unread messages per conversation
-  const unreadCounts = await Promise.all(
-    conversationIds.map(async (cid) => {
-      const count = await db.directMessage.count({
+  const result = await Promise.all(
+    conversations.map(async (conv) => {
+      const otherParticipant = conv.participants.find(
+        (p) => p.userId !== userId
+      );
+      const unreadCount = await db.directMessage.count({
         where: {
-          conversationId: cid,
+          conversationId: conv.id,
           senderId: { not: userId },
           isRead: false,
         },
       });
-      return { conversationId: cid, count };
+
+      return {
+        id: conv.id,
+        participant: otherParticipant?.user ?? null,
+        lastMessage: conv.messages[0] ?? null,
+        unreadCount,
+        updatedAt: conv.updatedAt.toISOString(),
+      };
     })
   );
 
-  const unreadMap = new Map(
-    unreadCounts.map((u) => [u.conversationId, u.count])
-  );
-
-  const result = conversations.map((c) => {
-    const otherParticipant = c.participants.find((p) => p.userId !== userId);
-    const lastMessage = c.messages[0] || null;
-
-    return {
-      id: c.id,
-      participant: otherParticipant
-        ? {
-            id: otherParticipant.user.id,
-            uid: otherParticipant.user.uid,
-            name: otherParticipant.user.name,
-            image: otherParticipant.user.image,
-          }
-        : null,
-      lastMessage,
-      unreadCount: unreadMap.get(c.id) || 0,
-      updatedAt: c.updatedAt,
-    };
-  });
-
-  return NextResponse.json({ conversations: result });
+  return Response.json(result);
 }
 
-// POST /api/messages/conversations — create or find existing conversation
+// POST /api/messages/conversations — create or get existing conversation
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const userId = session.user.id;
   const body = await req.json();
-  const { participantId } = body;
+  const { targetUserId } = body;
 
-  if (!participantId || participantId === userId) {
-    return NextResponse.json(
-      { error: "Invalid participant" },
+  if (!targetUserId || typeof targetUserId !== "string") {
+    return Response.json(
+      { error: "targetUserId is required" },
       { status: 400 }
     );
   }
 
-  // Check if a conversation already exists between these two users
-  const myConversations = await db.conversationParticipant.findMany({
+  if (targetUserId === userId) {
+    return Response.json(
+      { error: "Cannot message yourself" },
+      { status: 400 }
+    );
+  }
+
+  // Check target user exists
+  const targetUser = await db.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, uid: true, name: true, image: true },
+  });
+
+  if (!targetUser) {
+    return Response.json({ error: "User not found" }, { status: 404 });
+  }
+
+  // Check if conversation already exists between these two users
+  const existingParticipations = await db.conversationParticipant.findMany({
     where: { userId },
     select: { conversationId: true },
   });
 
-  for (const row of myConversations) {
-    const other = await db.conversationParticipant.findUnique({
+  for (const p of existingParticipations) {
+    const otherParticipant = await db.conversationParticipant.findFirst({
       where: {
-        conversationId_userId: {
-          conversationId: row.conversationId,
-          userId: participantId,
-        },
+        conversationId: p.conversationId,
+        userId: targetUserId,
       },
     });
-    if (other) {
-      // Existing conversation found
-      const participant = await db.user.findUnique({
-        where: { id: participantId },
-        select: {
-          id: true,
-          uid: true,
-          name: true,
-          image: true,
-          publicKey: true,
-        },
-      });
-      return NextResponse.json({
-        conversationId: row.conversationId,
-        participant: participant
-          ? {
-              ...participant,
-              publicKey: participant.publicKey
-                ? JSON.parse(participant.publicKey)
-                : null,
-            }
-          : null,
+    if (otherParticipant) {
+      return Response.json({
+        conversationId: p.conversationId,
+        participant: targetUser,
+        isNew: false,
       });
     }
   }
@@ -159,34 +139,14 @@ export async function POST(req: NextRequest) {
   const conversation = await db.conversation.create({
     data: {
       participants: {
-        create: [{ userId }, { userId: participantId }],
+        create: [{ userId }, { userId: targetUserId }],
       },
     },
   });
 
-  const participant = await db.user.findUnique({
-    where: { id: participantId },
-    select: {
-      id: true,
-      uid: true,
-      name: true,
-      image: true,
-      publicKey: true,
-    },
+  return Response.json({
+    conversationId: conversation.id,
+    participant: targetUser,
+    isNew: true,
   });
-
-  return NextResponse.json(
-    {
-      conversationId: conversation.id,
-      participant: participant
-        ? {
-            ...participant,
-            publicKey: participant.publicKey
-              ? JSON.parse(participant.publicKey)
-              : null,
-          }
-        : null,
-    },
-    { status: 201 }
-  );
 }

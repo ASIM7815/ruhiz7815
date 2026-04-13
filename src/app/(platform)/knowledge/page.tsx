@@ -38,6 +38,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 
 interface Resource {
   id: string;
@@ -64,6 +66,7 @@ const typeColors: Record<string, string> = {
 };
 
 export default function KnowledgeHubPage() {
+  const { data: session } = useSession();
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All");
@@ -99,19 +102,22 @@ export default function KnowledgeHubPage() {
 
   async function handleUpload() {
     if (!uploadForm.title || !uploadForm.type) return;
+    if (!file) { toast.error("Please select a file to upload"); return; }
     setUploading(true);
 
     let fileUrl: string | null = null;
-    if (file) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("type", "note");
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-      if (uploadRes.ok) {
-        const data = await uploadRes.json();
-        fileUrl = data.url;
-      }
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("type", "note");
+    const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+    if (!uploadRes.ok) {
+      const err = await uploadRes.json().catch(() => ({}));
+      toast.error(err.error || "File upload failed. Check storage configuration.");
+      setUploading(false);
+      return;
     }
+    const uploadData = await uploadRes.json();
+    fileUrl = uploadData.url;
 
     const res = await fetch("/api/resources", {
       method: "POST",
@@ -120,17 +126,29 @@ export default function KnowledgeHubPage() {
     });
 
     if (res.ok) {
+      toast.success("Resource uploaded successfully!");
       setShowUpload(false);
       setUploadForm({ title: "", description: "", type: "NOTES", university: "" });
       setFile(null);
-      // Refresh list
       const params = new URLSearchParams();
       if (filter !== "All") params.set("type", filter === "Notes" ? "NOTES" : filter === "Papers" ? "PAPER" : "MATERIAL");
       const listRes = await fetch(`/api/resources?${params}`);
       const data = await listRes.json();
       setResources(data.resources || []);
+    } else {
+      toast.error("Failed to save resource.");
     }
     setUploading(false);
+  }
+
+  async function handleDelete(id: string) {
+    const res = await fetch(`/api/resources/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Resource deleted.");
+      setResources((prev) => prev.filter((r) => r.id !== id));
+    } else {
+      toast.error("Failed to delete resource.");
+    }
   }
 
   async function getFileUrl(id: string): Promise<string | null> {
@@ -142,13 +160,13 @@ export default function KnowledgeHubPage() {
 
   async function handleView(id: string) {
     const url = await getFileUrl(id);
-    if (!url) return;
+    if (!url) { toast.error("No file attached to this resource."); return; }
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function handleDownload(id: string, title: string) {
     const url = await getFileUrl(id);
-    if (!url) return;
+    if (!url) { toast.error("No file attached to this resource."); return; }
     try {
       const res = await fetch(url);
       const blob = await res.blob();
@@ -161,7 +179,6 @@ export default function KnowledgeHubPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     } catch {
-      // Fallback: just open in new tab
       window.open(url, "_blank", "noopener,noreferrer");
     }
   }
@@ -297,6 +314,17 @@ export default function KnowledgeHubPage() {
                         <Download className="mr-1 h-3 w-3" />
                         Download
                       </Button>
+                      {session?.user?.id === resource.author.id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(resource.id)}
+                          title="Delete resource"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardFooter>

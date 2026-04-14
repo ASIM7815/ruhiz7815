@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -180,7 +181,7 @@ export function Testimonials() {
                           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                           Try Again
                         </Button>
-                        <Button size="sm" className="gap-1.5">
+                        <Button size="sm" className="gap-1.5" render={<Link href="/login" />}>
                           <Sparkles className="h-3.5 w-3.5" />
                           Find Your Team
                         </Button>

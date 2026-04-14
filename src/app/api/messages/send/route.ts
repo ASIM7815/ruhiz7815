@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase-server";
 
 const MAX_MESSAGE_LENGTH = 5000;
 
@@ -12,25 +12,14 @@ export async function POST(req: NextRequest) {
   }
 
   const userId = session.user.id;
-  const body = await req.json();
-  const { conversationId, content } = body;
+  const { conversationId, content } = await req.json();
 
   if (!conversationId || typeof conversationId !== "string") {
-    return Response.json(
-      { error: "conversationId is required" },
-      { status: 400 }
-    );
+    return Response.json({ error: "conversationId is required" }, { status: 400 });
   }
 
-  if (
-    !content ||
-    typeof content !== "string" ||
-    content.trim().length === 0
-  ) {
-    return Response.json(
-      { error: "Message content is required" },
-      { status: 400 }
-    );
+  if (!content || typeof content !== "string" || content.trim().length === 0) {
+    return Response.json({ error: "Message content is required" }, { status: 400 });
   }
 
   if (content.length > MAX_MESSAGE_LENGTH) {
@@ -41,37 +30,46 @@ export async function POST(req: NextRequest) {
   }
 
   // Verify user is a participant
-  const participant = await db.conversationParticipant.findUnique({
-    where: {
-      conversationId_userId: { conversationId, userId },
-    },
-  });
+  const { data: participant } = await supabaseAdmin
+    .from("conversation_participants")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId)
+    .single();
 
   if (!participant) {
     return Response.json({ error: "Not a participant" }, { status: 403 });
   }
 
-  // Create message and update conversation timestamp
-  const [message] = await db.$transaction([
-    db.directMessage.create({
-      data: {
-        conversationId,
-        senderId: userId,
-        content: content.trim(),
-      },
-      select: {
-        id: true,
-        content: true,
-        senderId: true,
-        isRead: true,
-        createdAt: true,
-      },
-    }),
-    db.conversation.update({
-      where: { id: conversationId },
-      data: { updatedAt: new Date() },
-    }),
-  ]);
+  // Create message
+  const { data: message, error: msgErr } = await supabaseAdmin
+    .from("direct_messages")
+    .insert({
+      conversation_id: conversationId,
+      sender_id: userId,
+      content: content.trim(),
+    })
+    .select("id, content, sender_id, is_read, created_at")
+    .single();
 
-  return Response.json(message, { status: 201 });
+  if (msgErr || !message) {
+    return Response.json({ error: "Failed to send message" }, { status: 500 });
+  }
+
+  // Update conversation timestamp
+  await supabaseAdmin
+    .from("conversations")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", conversationId);
+
+  return Response.json(
+    {
+      id: message.id,
+      content: message.content,
+      senderId: message.sender_id,
+      isRead: message.is_read,
+      createdAt: message.created_at,
+    },
+    { status: 201 }
+  );
 }

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase-server";
 
 // POST /api/messages/[id]/react — add emoji reaction
 export async function POST(
@@ -21,42 +21,55 @@ export async function POST(
   }
 
   // Verify message exists and user has access
-  const message = await db.directMessage.findUnique({
-    where: { id: messageId },
-    select: { conversationId: true },
-  });
+  const { data: message } = await supabaseAdmin
+    .from("direct_messages")
+    .select("conversation_id")
+    .eq("id", messageId)
+    .single();
 
   if (!message) {
     return Response.json({ error: "Message not found" }, { status: 404 });
   }
 
-  const participant = await db.conversationParticipant.findUnique({
-    where: {
-      conversationId_userId: {
-        conversationId: message.conversationId,
-        userId,
-      },
-    },
-  });
+  const { data: participant } = await supabaseAdmin
+    .from("conversation_participants")
+    .select("id")
+    .eq("conversation_id", message.conversation_id)
+    .eq("user_id", userId)
+    .single();
 
   if (!participant) {
     return Response.json({ error: "Not a participant" }, { status: 403 });
   }
 
-  // Upsert reaction
-  const existing = await db.messageReaction.findFirst({
-    where: { messageId, userId, emoji },
-  });
+  // Check if reaction already exists
+  const { data: existing } = await supabaseAdmin
+    .from("message_reactions")
+    .select("id, user_id, emoji")
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji)
+    .single();
 
   if (existing) {
-    return Response.json(existing);
+    return Response.json({ id: existing.id, userId: existing.user_id, emoji: existing.emoji });
   }
 
-  const reaction = await db.messageReaction.create({
-    data: { messageId, userId, emoji },
-  });
+  // Create reaction
+  const { data: reaction, error: rErr } = await supabaseAdmin
+    .from("message_reactions")
+    .insert({ message_id: messageId, user_id: userId, emoji })
+    .select("id, user_id, emoji")
+    .single();
 
-  return Response.json(reaction, { status: 201 });
+  if (rErr || !reaction) {
+    return Response.json({ error: "Failed to add reaction" }, { status: 500 });
+  }
+
+  return Response.json(
+    { id: reaction.id, userId: reaction.user_id, emoji: reaction.emoji },
+    { status: 201 }
+  );
 }
 
 // DELETE /api/messages/[id]/react — remove emoji reaction
@@ -77,15 +90,16 @@ export async function DELETE(
     return Response.json({ error: "emoji is required" }, { status: 400 });
   }
 
-  const reaction = await db.messageReaction.findFirst({
-    where: { messageId, userId, emoji },
-  });
+  const { error } = await supabaseAdmin
+    .from("message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
 
-  if (!reaction) {
+  if (error) {
     return Response.json({ error: "Reaction not found" }, { status: 404 });
   }
-
-  await db.messageReaction.delete({ where: { id: reaction.id } });
 
   return Response.json({ deleted: true });
 }

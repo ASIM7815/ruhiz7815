@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase-server";
 
 // PATCH /api/messages/[id]/read — mark all unread messages in conversation as read
 export async function PATCH(
@@ -15,25 +15,25 @@ export async function PATCH(
   const userId = session.user.id;
 
   // Verify user is a participant
-  const participant = await db.conversationParticipant.findUnique({
-    where: {
-      conversationId_userId: { conversationId, userId },
-    },
-  });
+  const { data: participant } = await supabaseAdmin
+    .from("conversation_participants")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId)
+    .single();
 
   if (!participant) {
     return Response.json({ error: "Not a participant" }, { status: 403 });
   }
 
   // Mark all unread messages from the other user as read
-  const result = await db.directMessage.updateMany({
-    where: {
-      conversationId,
-      senderId: { not: userId },
-      isRead: false,
-    },
-    data: { isRead: true },
-  });
+  const { data } = await supabaseAdmin
+    .from("direct_messages")
+    .update({ is_read: true })
+    .eq("conversation_id", conversationId)
+    .neq("sender_id", userId)
+    .eq("is_read", false)
+    .select("id");
 
-  return Response.json({ markedRead: result.count });
+  return Response.json({ markedRead: data?.length ?? 0 });
 }

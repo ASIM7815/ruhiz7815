@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase-client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   Search,
   Send,
@@ -109,15 +111,11 @@ function MessagesPageContent() {
 
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<
-    string | null
-  >(null);
-  const [selectedParticipant, setSelectedParticipant] =
-    useState<Participant | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [messages, setMessages] = useState<MessageData[]>([]);
   const [messageInput, setMessageInput] = useState("");
   const [loading, setLoading] = useState(true);
-  const [_sendingMessage, _setSendingMessage] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
@@ -125,11 +123,8 @@ function MessagesPageContent() {
   const [showMobileChat, setShowMobileChat] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const lastPollTimestamp = useRef<string>(new Date(0).toISOString());
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const convPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
-  );
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const convPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Fetch conversations ────────────────────────────────────────
 
@@ -149,50 +144,101 @@ function MessagesPageContent() {
 
   const fetchMessages = useCallback(async (conversationId: string) => {
     try {
-      const res = await fetch(
-        `/api/messages/conversations/${conversationId}`
-      );
+      const res = await fetch(`/api/messages/conversations/${conversationId}`);
       if (res.ok) {
         const data = await res.json();
         // Messages come in desc order, reverse for display
         setMessages(data.messages.reverse());
         setSelectedParticipant(data.participant);
-        lastPollTimestamp.current = new Date().toISOString();
       }
     } catch {
       // silently fail
     }
   }, []);
 
-  // ── Poll for new messages ──────────────────────────────────────
+  // ── Subscribe to Supabase Realtime for a conversation ──────────
 
-  const pollMessages = useCallback(async () => {
-    if (!selectedConversation) return;
-    try {
-      const res = await fetch(
-        `/api/messages/poll?conversationId=${selectedConversation}&since=${encodeURIComponent(lastPollTimestamp.current)}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data.messages.length > 0) {
-          setMessages((prev) => {
-            const existingIds = new Set(prev.map((m) => m.id));
-            const newMsgs = data.messages.filter(
-              (m: MessageData) => !existingIds.has(m.id)
-            );
-            return [...prev, ...newMsgs];
-          });
-          // Mark messages as read
-          fetch(`/api/messages/${selectedConversation}/read`, {
-            method: "PATCH",
-          });
-        }
-        lastPollTimestamp.current = data.timestamp;
+  const subscribeToConversation = useCallback(
+    (conversationId: string) => {
+      // Cleanup previous subscription
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
-    } catch {
-      // silently fail
-    }
-  }, [selectedConversation]);
+
+      const channel = supabase
+        .channel(`chat-${conversationId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "direct_messages",
+            filter: `conversation_id=eq.${conversationId}`,
+          },
+          (payload) => {
+            const row = payload.new as {
+              id: string;
+              content: string;
+              sender_id: string;
+              is_read: boolean;
+              created_at: string;
+              conversation_id: string;
+            };
+
+            // Only add messages from the OTHER user
+            // (own messages are already shown via optimistic update)
+            if (row.sender_id !== userId) {
+              const msg: MessageData = {
+                id: row.id,
+                content: row.content,
+                senderId: row.sender_id,
+                isRead: row.is_read,
+                createdAt: row.created_at,
+                reactions: [],
+              };
+
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === msg.id)) return prev;
+                return [...prev, msg];
+              });
+
+              // Mark as read since we're viewing the conversation
+              fetch(`/api/messages/${conversationId}/read`, { method: "PATCH" });
+              // Refresh conversation list
+              fetchConversations();
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "direct_messages",
+            filter: `conversation_id=eq.${conversationId}`,
+          },
+          (payload) => {
+            const row = payload.new as {
+              id: string;
+              is_read: boolean;
+              sender_id: string;
+            };
+
+            // Update read status (for WhatsApp-style double ticks)
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === row.id ? { ...m, isRead: row.is_read } : m
+              )
+            );
+          }
+        )
+        .subscribe();
+
+      channelRef.current = channel;
+    },
+    [userId, fetchConversations]
+  );
 
   // ── Initial load ───────────────────────────────────────────────
 
@@ -210,33 +256,31 @@ function MessagesPageContent() {
     didAutoOpen.current = true;
     setSelectedConversation(initialConversation);
     setShowMobileChat(true);
-    lastPollTimestamp.current = new Date(0).toISOString();
     fetchMessages(initialConversation);
+    subscribeToConversation(initialConversation);
     fetch(`/api/messages/${initialConversation}/read`, { method: "PATCH" });
-  }, [initialConversation, loading, fetchMessages]);
+  }, [initialConversation, loading, fetchMessages, subscribeToConversation]);
 
-  // ── Poll conversations (every 2s) ─────────────────────────────
+  // ── Poll conversations (every 5s — less critical than messages) ──
 
   useEffect(() => {
     if (!userId) return;
-    convPollIntervalRef.current = setInterval(fetchConversations, 2000);
+    convPollIntervalRef.current = setInterval(fetchConversations, 5000);
     return () => {
       if (convPollIntervalRef.current)
         clearInterval(convPollIntervalRef.current);
     };
   }, [userId, fetchConversations]);
 
-  // ── Poll messages (every 1s when a conversation is selected) ──
+  // ── Cleanup Realtime on unmount ────────────────────────────────
 
   useEffect(() => {
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    if (!selectedConversation) return;
-
-    pollIntervalRef.current = setInterval(pollMessages, 1000);
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
     };
-  }, [selectedConversation, pollMessages]);
+  }, []);
 
   // ── Auto-scroll to bottom ─────────────────────────────────────
 
@@ -251,13 +295,13 @@ function MessagesPageContent() {
       setSelectedConversation(conv.id);
       setSelectedParticipant(conv.participant);
       setShowMobileChat(true);
-      lastPollTimestamp.current = new Date(0).toISOString();
       fetchMessages(conv.id);
+      subscribeToConversation(conv.id);
 
       // Mark as read
       fetch(`/api/messages/${conv.id}/read`, { method: "PATCH" });
     },
-    [fetchMessages]
+    [fetchMessages, subscribeToConversation]
   );
 
   // ── Send message ───────────────────────────────────────────────
@@ -284,10 +328,7 @@ function MessagesPageContent() {
     fetch("/api/messages/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversationId: selectedConversation,
-        content,
-      }),
+      body: JSON.stringify({ conversationId: selectedConversation, content }),
     })
       .then((res) => {
         if (res.ok) {
@@ -355,15 +396,15 @@ function MessagesPageContent() {
           setShowMobileChat(true);
           setSearchResult(null);
           setSearchQuery("");
-          lastPollTimestamp.current = new Date(0).toISOString();
           fetchMessages(data.conversationId);
+          subscribeToConversation(data.conversationId);
           fetchConversations();
         }
       } catch {
         // silently fail
       }
     },
-    [fetchMessages, fetchConversations]
+    [fetchMessages, subscribeToConversation, fetchConversations]
   );
 
   // ── Toggle reaction ────────────────────────────────────────────
@@ -383,10 +424,7 @@ function MessagesPageContent() {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === messageId
-              ? {
-                  ...m,
-                  reactions: m.reactions.filter((r) => r.id !== existing.id),
-                }
+              ? { ...m, reactions: m.reactions.filter((r) => r.id !== existing.id) }
               : m
           )
         );
@@ -803,7 +841,6 @@ function MessagesPageContent() {
                     onKeyDown={handleKeyDown}
                     className="flex-1"
                     maxLength={5000}
-
                   />
                   <Tooltip>
                     <TooltipTrigger

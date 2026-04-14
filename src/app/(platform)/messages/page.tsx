@@ -15,6 +15,7 @@ import {
   Check,
   CheckCheck,
   User as UserIcon,
+  Users,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { GroupChat } from "@/components/group-chat";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -75,6 +77,16 @@ interface SearchResult {
   role: string;
   reputation: number;
   skills: string[];
+}
+
+interface GroupConversation {
+  id: string;
+  name: string;
+  image_url: string | null;
+  source_type: string | null;
+  member_count: number;
+  last_message: string | null;
+  last_message_at: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -121,6 +133,10 @@ function MessagesPageContent() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const [msgTab, setMsgTab] = useState<"chats" | "groups">("chats");
+  const [groupConversations, setGroupConversations] = useState<GroupConversation[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [groupsLoading, setGroupsLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -137,6 +153,21 @@ function MessagesPageContent() {
       }
     } catch {
       // silently fail for polling
+    }
+  }, []);
+
+  const fetchGroupConversations = useCallback(async () => {
+    setGroupsLoading(true);
+    try {
+      const res = await fetch("/api/groups");
+      if (res.ok) {
+        const data = await res.json();
+        setGroupConversations(data);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setGroupsLoading(false);
     }
   }, []);
 
@@ -247,6 +278,12 @@ function MessagesPageContent() {
     setLoading(true);
     fetchConversations().finally(() => setLoading(false));
   }, [userId, fetchConversations]);
+
+  useEffect(() => {
+    if (msgTab === "groups" && userId) {
+      fetchGroupConversations();
+    }
+  }, [msgTab, userId, fetchGroupConversations]);
 
   // ── Auto-open conversation from URL param ─────────────────────
 
@@ -507,6 +544,28 @@ function MessagesPageContent() {
           {/* Search */}
           <div className="p-4 border-b border-border space-y-3">
             <h2 className="text-lg font-semibold">Messages</h2>
+            {/* Tabs */}
+            <div className="flex gap-1 p-1 bg-muted rounded-lg">
+              <button
+                onClick={() => { setMsgTab("chats"); setSelectedGroupId(null); }}
+                className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  msgTab === "chats" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Chats
+              </button>
+              <button
+                onClick={() => { setMsgTab("groups"); setSelectedConversation(null); }}
+                className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+                  msgTab === "groups" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Users className="h-3 w-3" />
+                Groups
+              </button>
+            </div>
+            {msgTab === "chats" && (
+            <>
             <div className="flex gap-2">
               <Input
                 placeholder="Search by 5-digit UID..."
@@ -581,10 +640,14 @@ function MessagesPageContent() {
                 </Button>
               </div>
             )}
+            </>
+            )}
           </div>
 
           {/* Conversation List */}
           <ScrollArea className="flex-1">
+            {msgTab === "chats" ? (
+            <>
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -649,6 +712,64 @@ function MessagesPageContent() {
                 ))}
               </div>
             )}
+            </>
+            ) : (
+              /* Groups List */
+              groupsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : groupConversations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <Users className="h-12 w-12 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    No group chats yet
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Join a project, study group, or startup to get group chats
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {groupConversations.map((gc) => (
+                    <button
+                      key={gc.id}
+                      onClick={() => { setSelectedGroupId(gc.id); setShowMobileChat(true); }}
+                      className={`w-full flex items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left ${
+                        selectedGroupId === gc.id ? "bg-accent" : ""
+                      }`}
+                    >
+                      <Avatar className="h-10 w-10 flex-shrink-0">
+                        <AvatarImage src={gc.image_url ?? undefined} />
+                        <AvatarFallback className="bg-primary/10 text-primary">
+                          <Users className="h-4 w-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium truncate">{gc.name}</p>
+                          {gc.last_message_at && (
+                            <span className="text-[10px] text-muted-foreground ml-2 flex-shrink-0">
+                              {timeAgo(gc.last_message_at)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground truncate">
+                            {gc.last_message || `${gc.member_count} members`}
+                          </p>
+                          {gc.source_type && (
+                            <Badge variant="secondary" className="text-[9px] px-1.5 py-0 ml-1 flex-shrink-0">
+                              {gc.source_type.replace("_", " ")}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )
+            )}
           </ScrollArea>
         </div>
 
@@ -658,7 +779,18 @@ function MessagesPageContent() {
             showMobileChat ? "flex" : "hidden md:flex"
           }`}
         >
-          {selectedConversation && selectedParticipant ? (
+          {msgTab === "groups" && selectedGroupId ? (
+            <div className="flex-1 flex flex-col">
+              <div className="md:hidden p-2 border-b">
+                <Button variant="ghost" size="sm" onClick={() => { setSelectedGroupId(null); setShowMobileChat(false); }}>
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                </Button>
+              </div>
+              <div className="flex-1">
+                <GroupChat groupId={selectedGroupId} onBack={() => { setSelectedGroupId(null); setShowMobileChat(false); }} />
+              </div>
+            </div>
+          ) : selectedConversation && selectedParticipant ? (
             <>
               {/* Chat Header */}
               <div className="flex items-center gap-3 p-4 border-b border-border">

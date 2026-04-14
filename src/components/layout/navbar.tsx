@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { marketingNav } from "@/config/nav";
+import Image from "next/image";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -30,9 +31,7 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-heading text-lg font-bold">
-              R
-            </div>
+            <Image src="/logo.png" alt="RUHIZ" width={36} height={36} className="h-9 w-9 rounded-lg object-cover" />
             <span className="font-heading text-xl font-bold tracking-tight">
               RUHIZ
             </span>
@@ -65,9 +64,7 @@ export function Navbar() {
             <SheetContent side="right" className="w-80">
               <div className="flex flex-col gap-6 mt-8">
                 <Link href="/" className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-heading text-lg font-bold">
-                    R
-                  </div>
+                  <Image src="/logo.png" alt="RUHIZ" width={36} height={36} className="h-9 w-9 rounded-lg object-cover" />
                   <span className="font-heading text-xl font-bold">RUHIZ</span>
                 </Link>
                 <div className="flex flex-col gap-4">

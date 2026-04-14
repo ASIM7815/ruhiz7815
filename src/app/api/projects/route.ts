@@ -5,11 +5,20 @@ import { db } from "@/lib/db";
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const status = searchParams.get("status");
+  const ownerFilter = searchParams.get("owner");
   const cursor = searchParams.get("cursor");
   const take = 12;
 
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
+
+  if (ownerFilter === "me") {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    where.ownerId = session.user.id;
+  }
 
   const projects = await db.project.findMany({
     where,

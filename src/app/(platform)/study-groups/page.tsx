@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Search,
   Plus,
   Users,
+  CheckCircle2,
+  XCircle,
+  Inbox,
+  Loader2,
+  Clock,
+  Upload,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +32,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import Link from "next/link";
 
 interface StudyGroup {
   id: string;
@@ -36,12 +45,33 @@ interface StudyGroup {
   avatars: string[];
 }
 
+interface JoinRequest {
+  id: string;
+  userId: string;
+  status: string;
+  createdAt: string;
+  user: { id: string; name: string; image: string | null; uid: string | null; university: string | null };
+}
+
+interface MyGroup extends StudyGroup {
+  pendingRequests: JoinRequest[];
+  isLeader: boolean;
+}
+
 export default function StudyGroupsPage() {
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
+
+  const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [groups, setGroups] = useState<StudyGroup[]>([]);
+  const [myGroups, setMyGroups] = useState<MyGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [myLoading, setMyLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     subject: "",
@@ -57,6 +87,33 @@ export default function StudyGroupsPage() {
         setLoading(false);
       });
   }, []);
+
+  const loadMyGroups = useCallback(async () => {
+    if (!userId) return;
+    setMyLoading(true);
+    try {
+      const res = await fetch("/api/study-groups");
+      const data = await res.json();
+      const allGroups: StudyGroup[] = data.groups || [];
+
+      // For each group, check if user is a leader and get requests
+      const withDetails = await Promise.all(
+        allGroups.map(async (g) => {
+          const reqRes = await fetch(`/api/study-groups/${g.id}/join`);
+          const isLeader = reqRes.ok;
+          const pendingRequests = isLeader ? await reqRes.json() : [];
+          return { ...g, isLeader, pendingRequests } as MyGroup;
+        })
+      );
+      setMyGroups(withDetails.filter((g) => g.isLeader));
+    } finally {
+      setMyLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (tab === "mine") loadMyGroups();
+  }, [tab, loadMyGroups]);
 
   const filtered = search
     ? groups.filter(
@@ -80,25 +137,56 @@ export default function StudyGroupsPage() {
       }),
     });
     if (res.ok) {
+      toast.success("Study group created!");
       setShowCreate(false);
       setForm({ name: "", subject: "", description: "", maxMembers: "10" });
-      // Refresh
       const listRes = await fetch("/api/study-groups");
       const data = await listRes.json();
       setGroups(data.groups || []);
+    } else {
+      const err = await res.json();
+      toast.error(err.error || "Failed to create group.");
     }
     setCreating(false);
   }
 
-  async function handleJoin(id: string) {
-    const res = await fetch(`/api/study-groups/${id}/join`, { method: "POST" });
-    if (res.ok) {
-      // Refresh
-      const listRes = await fetch("/api/study-groups");
-      const data = await listRes.json();
-      setGroups(data.groups || []);
+  async function handleJoinRequest(groupId: string) {
+    setRequestingId(groupId);
+    try {
+      const res = await fetch(`/api/study-groups/${groupId}/join`, { method: "POST" });
+      if (res.ok) {
+        toast.success("Join request sent!");
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Failed to send request.");
+      }
+    } finally {
+      setRequestingId(null);
     }
   }
+
+  async function handleRequest(groupId: string, requestId: string, action: "ACCEPTED" | "REJECTED") {
+    setActionLoading(requestId);
+    try {
+      await fetch(`/api/study-groups/${groupId}/join/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: action }),
+      });
+      setMyGroups((prev) =>
+        prev.map((g) =>
+          g.id === groupId
+            ? { ...g, pendingRequests: g.pendingRequests.filter((r) => r.id !== requestId) }
+            : g
+        )
+      );
+      toast.success(action === "ACCEPTED" ? "Member accepted!" : "Request rejected.");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const totalPending = myGroups.reduce((s, g) => s + g.pendingRequests.length, 0);
 
   return (
     <div className="space-y-6">
@@ -117,92 +205,221 @@ export default function StudyGroupsPage() {
         </Button>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search study groups..."
-          className="pl-10"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+        <button
+          onClick={() => setTab("browse")}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            tab === "browse" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Browse Groups
+        </button>
+        <button
+          onClick={() => setTab("mine")}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+            tab === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          My Groups
+          {totalPending > 0 && (
+            <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5 min-w-[20px] text-center">
+              {totalPending}
+            </span>
+          )}
+        </button>
       </div>
 
-      {loading ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <p className="text-muted-foreground">No study groups found.</p>
-            <Button className="mt-4" onClick={() => setShowCreate(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create the first one!
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filtered.map((group) => (
-            <Card
-              key={group.id}
-              className="group hover:shadow-lg hover:border-primary/30 transition-all"
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-heading text-lg font-semibold group-hover:text-primary transition-colors">
-                      {group.name}
-                    </h3>
-                    <Badge variant="secondary" className="text-xs mt-1">
-                      {group.subject}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pb-3">
-                {group.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {group.description}
-                  </p>
-                )}
-                <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5" />
-                    {group.memberCount}/{group.maxMembers} members
-                  </span>
-                </div>
+      {tab === "browse" ? (
+        <>
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search study groups..."
+              className="pl-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          {loading ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {[1, 2].map((i) => (
+                <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <p className="text-muted-foreground">No study groups found.</p>
+                <Button className="mt-4" onClick={() => setShowCreate(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create the first one!
+                </Button>
               </CardContent>
-              <CardFooter className="pt-3 border-t">
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex -space-x-2">
-                    {group.avatars.slice(0, 3).map((avatar, i) => (
-                      <Avatar key={i} className="h-7 w-7 border-2 border-background">
-                        <AvatarImage src={avatar} />
-                        <AvatarFallback>U</AvatarFallback>
-                      </Avatar>
-                    ))}
-                    {group.memberCount > 3 && (
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-medium">
-                        +{group.memberCount - 3}
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => handleJoin(group.id)}
-                    disabled={group.memberCount >= group.maxMembers}
-                  >
-                    {group.memberCount >= group.maxMembers ? "Full" : "Join Group"}
-                  </Button>
-                </div>
-              </CardFooter>
             </Card>
-          ))}
-        </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {filtered.map((group) => (
+                <Card
+                  key={group.id}
+                  className="group hover:shadow-lg hover:border-primary/30 transition-all"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-heading text-lg font-semibold group-hover:text-primary transition-colors">
+                          {group.name}
+                        </h3>
+                        <Badge variant="secondary" className="text-xs mt-1">
+                          {group.subject}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pb-3">
+                    {group.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {group.description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" />
+                        {group.memberCount}/{group.maxMembers} members
+                      </span>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="pt-3 border-t">
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex -space-x-2">
+                        {group.avatars.slice(0, 3).map((avatar, i) => (
+                          <Avatar key={i} className="h-7 w-7 border-2 border-background">
+                            <AvatarImage src={avatar} />
+                            <AvatarFallback>U</AvatarFallback>
+                          </Avatar>
+                        ))}
+                        {group.memberCount > 3 && (
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-medium">
+                            +{group.memberCount - 3}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleJoinRequest(group.id)}
+                        disabled={group.memberCount >= group.maxMembers || requestingId === group.id}
+                      >
+                        {requestingId === group.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : group.memberCount >= group.maxMembers ? null : (
+                          <Clock className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        {group.memberCount >= group.maxMembers ? "Full" : "Request to Join"}
+                      </Button>
+                    </div>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        /* My Groups Tab */
+        myLoading ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
+            ))}
+          </div>
+        ) : myGroups.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <p className="text-muted-foreground">You haven&apos;t created any study groups yet.</p>
+              <Button className="mt-4" onClick={() => setShowCreate(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create your first group
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {myGroups.map((group) => (
+              <Card key={group.id} className="overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-heading text-lg font-semibold">{group.name}</h3>
+                      <Badge variant="secondary" className="text-xs">{group.subject}</Badge>
+                    </div>
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      {group.memberCount}/{group.maxMembers}
+                    </span>
+                  </div>
+                </CardHeader>
+                {group.pendingRequests.length > 0 ? (
+                  <CardContent className="pt-0">
+                    <div className="border rounded-lg">
+                      <div className="px-4 py-2.5 bg-muted/50 border-b flex items-center gap-2">
+                        <Inbox className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-medium">
+                          Pending Requests ({group.pendingRequests.length})
+                        </span>
+                      </div>
+                      <div className="divide-y">
+                        {group.pendingRequests.map((req) => (
+                          <div key={req.id} className="p-4 flex items-center gap-4">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={req.user.image || ""} />
+                              <AvatarFallback>{req.user.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm">{req.user.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {req.user.university || ""} {req.user.uid ? `· #${req.user.uid}` : ""}
+                              </p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <Button
+                                size="sm"
+                                onClick={() => handleRequest(group.id, req.id, "ACCEPTED")}
+                                disabled={actionLoading === req.id}
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                              >
+                                {actionLoading === req.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                                )}
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRequest(group.id, req.id, "REJECTED")}
+                                disabled={actionLoading === req.id}
+                                className="border-red-300 text-red-600 hover:bg-red-50"
+                              >
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                ) : (
+                  <CardContent className="pt-0">
+                    <p className="text-sm text-muted-foreground">No pending join requests</p>
+                  </CardContent>
+                )}
+              </Card>
+            ))}
+          </div>
+        )
       )}
 
       {/* Create Dialog */}
@@ -211,7 +428,7 @@ export default function StudyGroupsPage() {
           <DialogHeader>
             <DialogTitle>Create Study Group</DialogTitle>
             <DialogDescription>
-              Start a new study group for your subject
+              Start a new study group. You must have uploaded at least 1 resource to the Knowledge Hub.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -249,6 +466,12 @@ export default function StudyGroupsPage() {
                 value={form.maxMembers}
                 onChange={(e) => setForm({ ...form, maxMembers: e.target.value })}
               />
+            </div>
+            <div className="p-3 bg-muted/50 rounded-lg flex items-start gap-2">
+              <Upload className="h-4 w-4 mt-0.5 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">
+                Prerequisite: You must have uploaded at least 1 resource to the <Link href="/knowledge" className="text-primary underline">Knowledge Hub</Link> before creating a group.
+              </p>
             </div>
             <Button onClick={handleCreate} className="w-full" disabled={creating || !form.name || !form.subject}>
               {creating ? "Creating..." : "Create Group"}

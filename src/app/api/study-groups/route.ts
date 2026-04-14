@@ -36,6 +36,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Check that user has uploaded at least 1 resource
+  const uploadCount = await db.resource.count({ where: { authorId: session.user.id } });
+  if (uploadCount === 0) {
+    return NextResponse.json(
+      { error: "You must upload at least 1 resource to the Knowledge Hub before creating a study group." },
+      { status: 403 }
+    );
+  }
+
   const body = await req.json();
   const { name, subject, description, maxMembers } = body;
 

@@ -3,6 +3,39 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { deleteFromGCS } from "@/lib/gcs";
 
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const body = await req.json();
+  const { title } = body;
+
+  if (!title || typeof title !== "string" || title.trim().length === 0) {
+    return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  }
+
+  const resource = await db.resource.findUnique({ where: { id } });
+  if (!resource) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (resource.authorId !== session.user.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const updated = await db.resource.update({
+    where: { id },
+    data: { title: title.trim() },
+  });
+
+  return NextResponse.json({ id: updated.id, title: updated.title });
+}
+
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

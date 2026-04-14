@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Mail } from "lucide-react";
+import Image from "next/image";
 
 function TwitterIcon({ className }: { className?: string }) {
   return (
@@ -64,9 +65,7 @@ export function Footer() {
             {/* Brand */}
             <div className="col-span-2 md:col-span-1">
               <Link href="/" className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-heading text-lg font-bold">
-                  R
-                </div>
+                <Image src="/logo.png" alt="RUHIZ" width={36} height={36} className="h-9 w-9 rounded-lg object-cover" />
                 <span className="font-heading text-xl font-bold tracking-tight">
                   RUHIZ
                 </span>

@@ -3,10 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   ArrowLeft,
   Users,
   Clock,
+  Send,
+  CheckCircle2,
+  Loader2,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 
 interface ProjectDetail {
   id: string;
@@ -47,17 +53,64 @@ interface ProjectDetail {
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [joinStatus, setJoinStatus] = useState<"none" | "pending" | "member" | "owner">("none");
+  const [joinMessage, setJoinMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
       .then((r) => r.json())
       .then((data) => {
         setProject(data);
+        if (userId) {
+          if (data.owner?.id === userId) {
+            setJoinStatus("owner");
+          } else if (data.members?.some((m: { id: string }) => m.id === userId)) {
+            setJoinStatus("member");
+          }
+        }
         setLoading(false);
       });
-  }, [projectId]);
+  }, [projectId, userId]);
+
+  useEffect(() => {
+    if (!userId || !projectId || joinStatus !== "none") return;
+    fetch(`/api/projects/${projectId}/join`, { method: "GET" })
+      .then((r) => {
+        if (r.status === 403) {
+          // Not owner, check if we have a pending request by trying to submit a check
+          return null;
+        }
+        return r.json();
+      })
+      .catch(() => null);
+  }, [userId, projectId, joinStatus]);
+
+  const handleJoinRequest = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: joinMessage || undefined }),
+      });
+      if (res.ok) {
+        setJoinStatus("pending");
+        setShowForm(false);
+      } else {
+        const data = await res.json();
+        if (data.error?.includes("already pending")) setJoinStatus("pending");
+        if (data.error?.includes("already a member")) setJoinStatus("member");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -176,9 +229,60 @@ export default function ProjectDetailPage() {
         <div className="space-y-6">
           <Card>
             <CardContent className="p-5 space-y-4">
-              <Button className="w-full" size="lg">
-                Apply to Join
-              </Button>
+              {joinStatus === "owner" ? (
+                <Button className="w-full" size="lg" variant="outline" disabled>
+                  Your Project
+                </Button>
+              ) : joinStatus === "member" ? (
+                <Button className="w-full" size="lg" variant="outline" disabled>
+                  <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
+                  You&apos;re a Member
+                </Button>
+              ) : joinStatus === "pending" ? (
+                <Button className="w-full" size="lg" variant="outline" disabled>
+                  <Clock className="mr-2 h-4 w-4 text-amber-500" />
+                  Request Pending
+                </Button>
+              ) : showForm ? (
+                <div className="space-y-3">
+                  <Textarea
+                    placeholder="Why do you want to join? (optional)"
+                    value={joinMessage}
+                    onChange={(e) => setJoinMessage(e.target.value)}
+                    rows={3}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      size="lg"
+                      onClick={handleJoinRequest}
+                      disabled={submitting}
+                    >
+                      {submitting ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="mr-2 h-4 w-4" />
+                      )}
+                      Send Request
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="lg"
+                      onClick={() => setShowForm(false)}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={() => setShowForm(true)}
+                >
+                  Apply to Join
+                </Button>
+              )}
               <Separator />
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">

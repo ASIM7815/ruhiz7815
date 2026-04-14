@@ -41,6 +41,10 @@ model User {
   listings         Listing[]
   startups         Startup[]
   studyGroupMembers StudyGroupMember[]
+  joinRequests       JoinRequest[]
+  startupMembers     StartupMember[]
+  startupJoinRequests StartupJoinRequest[]
+  studyGroupJoinRequests StudyGroupJoinRequest[]
 }
 
 model Account {
@@ -116,6 +120,7 @@ model Project {
   skills  ProjectSkill[]
   tasks   Task[]
   messages Message[]
+  joinRequests JoinRequest[]
 }
 
 model ProjectSkill {
@@ -189,6 +194,7 @@ model StudyGroup {
   createdAt   DateTime @default(now())
 
   members StudyGroupMember[]
+  joinRequests StudyGroupJoinRequest[]
 }
 
 model StudyGroupMember {
@@ -230,6 +236,8 @@ model Startup {
   createdAt   DateTime @default(now())
 
   founder User @relation(fields: [founderId], references: [id])
+  members StartupMember[]
+  joinRequests StartupJoinRequest[]
 }
 
 model Notification {
@@ -242,4 +250,58 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model JoinRequest {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  message   String?
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model StartupMember {
+  id        String   @id @default(cuid())
+  startupId String
+  userId    String
+  role      String   @default("MEMBER") // FOUNDER, MEMBER
+  joinedAt  DateTime @default(now())
+
+  startup Startup @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([startupId, userId])
+}
+
+model StartupJoinRequest {
+  id        String   @id @default(cuid())
+  startupId String
+  userId    String
+  message   String?
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt DateTime @default(now())
+
+  startup Startup @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([startupId, userId])
+}
+
+model StudyGroupJoinRequest {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt DateTime @default(now())
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
 }

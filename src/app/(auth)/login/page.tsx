@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -20,9 +21,7 @@ export default function LoginPage() {
     <div className="space-y-6">
       <div className="text-center">
         <Link href="/" className="inline-flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-heading text-xl font-bold">
-            R
-          </div>
+          <Image src="/logo.png" alt="RUHIZ" width={40} height={40} className="h-10 w-10 rounded-xl object-cover" />
           <span className="font-heading text-2xl font-bold tracking-tight">RUHIZ</span>
         </Link>
       </div>

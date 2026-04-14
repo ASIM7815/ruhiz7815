@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Search,
   Upload,
@@ -11,6 +11,9 @@ import {
   BookOpen,
   GraduationCap,
   X,
+  Pencil,
+  Check,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,12 +70,18 @@ const typeColors: Record<string, string> = {
 
 export default function KnowledgeHubPage() {
   const { data: session } = useSession();
+  const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [resources, setResources] = useState<Resource[]>([]);
+  const [myResources, setMyResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [myLoading, setMyLoading] = useState(false);
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [renaming, setRenaming] = useState(false);
   const [uploadForm, setUploadForm] = useState({
     title: "",
     description: "",
@@ -146,8 +155,46 @@ export default function KnowledgeHubPage() {
     if (res.ok) {
       toast.success("Resource deleted.");
       setResources((prev) => prev.filter((r) => r.id !== id));
+      setMyResources((prev) => prev.filter((r) => r.id !== id));
     } else {
       toast.error("Failed to delete resource.");
+    }
+  }
+
+  const loadMyResources = useCallback(async () => {
+    setMyLoading(true);
+    try {
+      const res = await fetch(`/api/resources?author=me`);
+      const data = await res.json();
+      setMyResources(data.resources || []);
+    } finally {
+      setMyLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab === "mine") loadMyResources();
+  }, [tab, loadMyResources]);
+
+  async function handleRename(id: string) {
+    if (!editTitle.trim()) return;
+    setRenaming(true);
+    try {
+      const res = await fetch(`/api/resources/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editTitle.trim() }),
+      });
+      if (res.ok) {
+        toast.success("Name updated.");
+        setMyResources((prev) => prev.map((r) => r.id === id ? { ...r, title: editTitle.trim() } : r));
+        setResources((prev) => prev.map((r) => r.id === id ? { ...r, title: editTitle.trim() } : r));
+        setEditingId(null);
+      } else {
+        toast.error("Failed to rename.");
+      }
+    } finally {
+      setRenaming(false);
     }
   }
 
@@ -201,6 +248,28 @@ export default function KnowledgeHubPage() {
         </Button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+        <button
+          onClick={() => setTab("browse")}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            tab === "browse" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Browse All
+        </button>
+        <button
+          onClick={() => setTab("mine")}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            tab === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          My Uploads
+        </button>
+      </div>
+
+      {tab === "browse" ? (
+      <>
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -332,6 +401,116 @@ export default function KnowledgeHubPage() {
             );
           })}
         </div>
+      )}
+      </>
+      ) : (
+        /* My Uploads Tab */
+        myLoading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
+            ))}
+          </div>
+        ) : myResources.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <p className="text-muted-foreground">You haven&apos;t uploaded any resources yet.</p>
+              <Button className="mt-4" onClick={() => setShowUpload(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Upload your first resource
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {myResources.map((resource) => {
+              const TypeIcon = typeIcons[resource.type] || FileText;
+              const isEditing = editingId === resource.id;
+              return (
+                <Card key={resource.id} className="hover:border-primary/30 transition-all">
+                  <CardContent className="p-4 flex items-center gap-4">
+                    <div className="shrink-0">
+                      <Badge variant="outline" className={typeColors[resource.type]}>
+                        <TypeIcon className="h-3 w-3 mr-1" />
+                        {resource.type.charAt(0) + resource.type.slice(1).toLowerCase()}
+                      </Badge>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {isEditing ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            className="h-8 text-sm"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRename(resource.id);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRename(resource.id)}
+                            disabled={renaming}
+                          >
+                            {renaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 text-emerald-500" />}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="font-medium text-sm truncate">{resource.title}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                          {resource.rating}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Download className="h-3 w-3" />
+                          {resource.downloads}
+                        </span>
+                        {resource.university && <span>{resource.university}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {!isEditing && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => { setEditingId(resource.id); setEditTitle(resource.title); }}
+                          title="Rename"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleView(resource.id)}
+                        disabled={!resource.fileUrl}
+                        title="View"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(resource.id)}
+                        title="Delete"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )
       )}
 
       {/* Upload Dialog */}

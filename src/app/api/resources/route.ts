@@ -5,11 +5,20 @@ import { db } from "@/lib/db";
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const type = searchParams.get("type");
+  const authorFilter = searchParams.get("author");
   const cursor = searchParams.get("cursor");
   const take = 12;
 
   const where: Record<string, unknown> = {};
   if (type) where.type = type;
+
+  if (authorFilter === "me") {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    where.authorId = session.user.id;
+  }
 
   const resources = await db.resource.findMany({
     where,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-// POST: Submit a join request
+// POST: Submit join request
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -14,50 +14,42 @@ export async function POST(
 
   const { id } = await params;
 
-  const group = await db.studyGroup.findUnique({
-    where: { id },
-    include: { _count: { select: { members: true } } },
-  });
-
-  if (!group) {
-    return NextResponse.json({ error: "Group not found" }, { status: 404 });
-  }
-
-  if (group._count.members >= group.maxMembers) {
-    return NextResponse.json({ error: "Group is full" }, { status: 400 });
+  const startup = await db.startup.findUnique({ where: { id } });
+  if (!startup) {
+    return NextResponse.json({ error: "Startup not found" }, { status: 404 });
   }
 
   // Check if already a member
-  const existing = await db.studyGroupMember.findUnique({
-    where: { groupId_userId: { groupId: id, userId: session.user.id } },
+  const existing = await db.startupMember.findUnique({
+    where: { startupId_userId: { startupId: id, userId: session.user.id } },
   });
   if (existing) {
     return NextResponse.json({ error: "Already a member" }, { status: 400 });
   }
 
   // Check existing request
-  const existingReq = await db.studyGroupJoinRequest.findUnique({
-    where: { groupId_userId: { groupId: id, userId: session.user.id } },
+  const existingReq = await db.startupJoinRequest.findUnique({
+    where: { startupId_userId: { startupId: id, userId: session.user.id } },
   });
   if (existingReq?.status === "PENDING") {
     return NextResponse.json({ error: "You already have a pending request" }, { status: 400 });
   }
 
   if (existingReq) {
-    await db.studyGroupJoinRequest.update({
+    await db.startupJoinRequest.update({
       where: { id: existingReq.id },
-      data: { status: "PENDING" },
+      data: { status: "PENDING", message: null },
     });
   } else {
-    await db.studyGroupJoinRequest.create({
-      data: { groupId: id, userId: session.user.id },
+    await db.startupJoinRequest.create({
+      data: { startupId: id, userId: session.user.id },
     });
   }
 
   return NextResponse.json({ success: true, status: "PENDING" });
 }
 
-// GET: List pending requests (leader only)
+// GET: List pending requests (founder only)
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -69,16 +61,13 @@ export async function GET(
 
   const { id } = await params;
 
-  // Check if user is a leader
-  const membership = await db.studyGroupMember.findUnique({
-    where: { groupId_userId: { groupId: id, userId: session.user.id } },
-  });
-  if (!membership || membership.role !== "LEADER") {
+  const startup = await db.startup.findUnique({ where: { id } });
+  if (!startup || startup.founderId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const requests = await db.studyGroupJoinRequest.findMany({
-    where: { groupId: id, status: "PENDING" },
+  const requests = await db.startupJoinRequest.findMany({
+    where: { startupId: id, status: "PENDING" },
     include: {
       user: { select: { id: true, name: true, image: true, uid: true, university: true } },
     },

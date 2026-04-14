@@ -198,24 +198,17 @@ export default function KnowledgeHubPage() {
     }
   }
 
-  async function getFileUrl(id: string): Promise<string | null> {
-    const res = await fetch(`/api/resources/${id}/download`);
-    if (!res.ok) return null;
-    const { url } = await res.json();
-    return url || null;
+  function handleView(fileUrl: string | null) {
+    if (!fileUrl) { toast.error("No file attached to this resource."); return; }
+    window.open(fileUrl, "_blank", "noopener,noreferrer");
   }
 
-  async function handleView(id: string) {
-    const url = await getFileUrl(id);
-    if (!url) { toast.error("No file attached to this resource."); return; }
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-
-  async function handleDownload(id: string, title: string) {
-    const url = await getFileUrl(id);
-    if (!url) { toast.error("No file attached to this resource."); return; }
+  async function handleDownload(fileUrl: string | null, title: string, id: string) {
+    if (!fileUrl) { toast.error("No file attached to this resource."); return; }
+    // Increment download count in background
+    fetch(`/api/resources/${id}/download`).catch(() => {});
     try {
-      const res = await fetch(url);
+      const res = await fetch(fileUrl);
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -226,7 +219,7 @@ export default function KnowledgeHubPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(fileUrl, "_blank", "noopener,noreferrer");
     }
   }
 
@@ -366,7 +359,7 @@ export default function KnowledgeHubPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleView(resource.id)}
+                        onClick={() => handleView(resource.fileUrl)}
                         title="Open in browser"
                         disabled={!resource.fileUrl}
                       >
@@ -376,7 +369,7 @@ export default function KnowledgeHubPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDownload(resource.id, resource.title)}
+                        onClick={() => handleDownload(resource.fileUrl, resource.title, resource.id)}
                         title="Download file"
                         disabled={!resource.fileUrl}
                       >
@@ -489,7 +482,7 @@ export default function KnowledgeHubPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleView(resource.id)}
+                        onClick={() => handleView(resource.fileUrl)}
                         disabled={!resource.fileUrl}
                         title="View"
                       >
@@ -573,7 +566,7 @@ export default function KnowledgeHubPage() {
               />
               <p className="text-xs text-muted-foreground">PDF, DOC, PPT, ZIP, or images. Max 10MB.</p>
             </div>
-            <Button onClick={handleUpload} className="w-full" disabled={uploading || !uploadForm.title}>
+            <Button onClick={handleUpload} className="w-full" disabled={uploading || !uploadForm.title || !file}>
               {uploading ? "Uploading..." : "Upload"}
             </Button>
           </div>

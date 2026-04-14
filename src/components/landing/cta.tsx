@@ -29,8 +29,8 @@ export function CTA() {
             </span>
           </h2>
           <p className="mt-6 text-lg text-muted-foreground max-w-xl mx-auto">
-            Sign up with your college email and start building with students
-            from 500+ universities worldwide. It&apos;s free to get started.
+            Sign up and start building with students from universities
+            everywhere. It&apos;s free — no cap.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button size="lg" className="h-12 px-8 text-base" render={<Link href="/register" />}>

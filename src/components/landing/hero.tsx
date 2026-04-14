@@ -1,9 +1,19 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles } from "lucide-react";
+
+const vibes = [
+  "build projects together 🔨",
+  "find your co-founder 🤝",
+  "share knowledge freely 📚",
+  "launch startups early 🚀",
+  "grow your network 🌐",
+  "learn by doing 💡",
+];
 
 export function Hero() {
   return (
@@ -50,8 +60,7 @@ export function Hero() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed"
           >
-            Join thousands of students from universities worldwide. Find
-            teammates with AI matching, build real-world projects, share
+            Find teammates with AI matching, build real-world projects, share
             knowledge, and launch startups — all in one platform.
           </motion.p>
 
@@ -76,30 +85,48 @@ export function Hero() {
             </Button>
           </motion.div>
 
-          {/* Stats bar */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="mt-16 grid grid-cols-3 gap-8 max-w-lg mx-auto"
-          >
-            {[
-              { value: "10K+", label: "Students" },
-              { value: "500+", label: "Universities" },
-              { value: "2K+", label: "Projects" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="font-heading text-2xl md:text-3xl font-bold text-foreground">
-                  {stat.value}
-                </div>
-                <div className="text-sm text-muted-foreground mt-1">
-                  {stat.label}
-                </div>
-              </div>
-            ))}
-          </motion.div>
+          {/* Animated vibe text */}
+          <VibeText />
         </div>
       </div>
     </section>
+  );
+}
+
+function VibeText() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % vibes.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.4 }}
+      className="mt-14 flex items-center justify-center gap-3 text-lg text-muted-foreground"
+    >
+      <span>Made for students who</span>
+      <span className="relative h-8 overflow-hidden w-56 text-left">
+        {vibes.map((vibe, i) => (
+          <motion.span
+            key={vibe}
+            className="absolute inset-0 font-semibold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent"
+            initial={{ y: 30, opacity: 0 }}
+            animate={{
+              y: i === index ? 0 : i === (index - 1 + vibes.length) % vibes.length ? -30 : 30,
+              opacity: i === index ? 1 : 0,
+            }}
+            transition={{ duration: 0.4 }}
+          >
+            {vibe}
+          </motion.span>
+        ))}
+      </span>
+    </motion.div>
   );
 }

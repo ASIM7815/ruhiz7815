@@ -343,7 +343,7 @@ export default function KnowledgeHubPage() {
                   </div>
                 </CardContent>
                 <CardFooter className="pt-3 border-t">
-                  <div className="flex items-center justify-between w-full">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full gap-2">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-6 w-6">
                         <AvatarImage src={resource.author.image || ""} />
@@ -351,7 +351,7 @@ export default function KnowledgeHubPage() {
                           {resource.author.name?.charAt(0)?.toUpperCase() || "U"}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-xs font-medium">
+                      <span className="text-xs font-medium truncate max-w-[120px]">
                         {resource.author.name}
                       </span>
                     </div>
@@ -363,8 +363,8 @@ export default function KnowledgeHubPage() {
                         title="Open in browser"
                         disabled={!resource.fileUrl}
                       >
-                        <Eye className="mr-1 h-3 w-3" />
-                        View
+                        <Eye className="h-3.5 w-3.5 sm:mr-1" />
+                        <span className="hidden sm:inline">View</span>
                       </Button>
                       <Button
                         variant="ghost"
@@ -373,8 +373,8 @@ export default function KnowledgeHubPage() {
                         title="Download file"
                         disabled={!resource.fileUrl}
                       >
-                        <Download className="mr-1 h-3 w-3" />
-                        Download
+                        <Download className="h-3.5 w-3.5 sm:mr-1" />
+                        <span className="hidden sm:inline">Download</span>
                       </Button>
                       {session?.user?.id === resource.author.id && (
                         <Button

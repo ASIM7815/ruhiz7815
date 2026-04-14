@@ -91,9 +91,9 @@ export default function ProfilePage() {
                 {user.name?.charAt(0)?.toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
-              <div className="flex items-start justify-between">
-                <div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h1 className="font-heading text-2xl font-bold">
                       {user.name}
@@ -113,7 +113,7 @@ export default function ProfilePage() {
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1 text-sm text-muted-foreground">
                     {user.university && (
                       <span className="flex items-center gap-1">
                         <GraduationCap className="h-4 w-4" />
@@ -126,7 +126,7 @@ export default function ProfilePage() {
                     </span>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" render={<Link href="/settings" />}>
+                <Button variant="outline" size="sm" className="w-full sm:w-auto shrink-0" render={<Link href="/settings" />}>
                     <Edit className="mr-2 h-3 w-3" />
                     Edit Profile
                 </Button>

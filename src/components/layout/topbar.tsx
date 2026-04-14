@@ -59,12 +59,12 @@ export function Topbar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/80 backdrop-blur-xl px-4 lg:px-6">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 sm:gap-4 border-b bg-background/80 backdrop-blur-xl px-3 sm:px-4 lg:px-6">
       {/* Spacer for mobile menu button */}
-      <div className="lg:hidden w-10" />
+      <div className="lg:hidden w-10 shrink-0" />
 
       {/* Search by UID */}
-      <div className="flex-1 max-w-md relative">
+      <div className="flex-1 max-w-md relative hidden sm:block">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -111,20 +111,23 @@ export function Topbar() {
         )}
       </div>
 
+      {/* Spacer on mobile to push icons right */}
+      <div className="flex-1 sm:hidden" />
+
       {/* Right side */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9"
+          className="h-10 w-10"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
           <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
         </Button>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9">
+        <Button variant="ghost" size="icon" className="relative h-10 w-10">
           <Bell className="h-4 w-4" />
-          <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary" />
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
         </Button>
         <Avatar className="h-8 w-8">
           <AvatarImage src={userImage} />

@@ -64,7 +64,7 @@ export function Testimonials() {
             <Flame className="h-4 w-4 text-orange-400" />
           </div>
 
-          <div className="h-32 flex items-center justify-center">
+          <div className="h-28 sm:h-32 flex items-center justify-center px-4">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentQuote}
@@ -75,7 +75,7 @@ export function Testimonials() {
                 className="text-center"
               >
                 <span className="text-4xl mb-3 block">{quotes[currentQuote].emoji}</span>
-                <h2 className={`font-heading text-2xl md:text-3xl font-bold bg-gradient-to-r ${quotes[currentQuote].gradient} bg-clip-text text-transparent`}>
+                <h2 className={`font-heading text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r ${quotes[currentQuote].gradient} bg-clip-text text-transparent`}>
                   &ldquo;{quotes[currentQuote].text}&rdquo;
                 </h2>
               </motion.div>

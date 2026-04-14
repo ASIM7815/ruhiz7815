@@ -534,7 +534,7 @@ function MessagesPageContent() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+      <div className="flex h-[calc(100dvh-4rem)] overflow-hidden -m-3 sm:-m-4 lg:-m-6">
         {/* ── Left Panel: Conversations ── */}
         <div
           className={`w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-background ${
@@ -976,7 +976,7 @@ function MessagesPageContent() {
                   />
                   <Tooltip>
                     <TooltipTrigger
-                      className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium h-9 w-9 bg-primary text-primary-foreground hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium h-11 w-11 sm:h-9 sm:w-9 bg-primary text-primary-foreground hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50 shrink-0"
                       onClick={sendMessage}
                       disabled={!messageInput.trim()}
                     >

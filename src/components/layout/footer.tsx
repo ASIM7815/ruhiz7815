@@ -79,7 +79,7 @@ export function Footer() {
                   <Link
                     key={social.label}
                     href={social.href}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-muted hover:bg-primary hover:text-primary-foreground transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-muted hover:bg-primary hover:text-primary-foreground transition-colors"
                     aria-label={social.label}
                   >
                     <social.icon className="h-4 w-4" />

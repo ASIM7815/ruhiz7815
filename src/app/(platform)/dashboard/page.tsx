@@ -152,16 +152,16 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="font-heading text-2xl md:text-3xl font-bold flex items-center gap-2">
-            Welcome back <Flame className="h-7 w-7 text-orange-400" />
+          <h1 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
+            Welcome back <Flame className="h-6 w-6 sm:h-7 sm:w-7 text-orange-400" />
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Here&apos;s your activity overview and analytics.
           </p>
         </div>
-        <Button render={<Link href="/projects/create" />} className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 border-0">
+        <Button render={<Link href="/projects/create" />} className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 border-0 w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           New Project
         </Button>
@@ -191,8 +191,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts Row 1 */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border-border/50 bg-card/80 backdrop-blur-sm">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="md:col-span-1 lg:col-span-2 border-border/50 bg-card/80 backdrop-blur-sm">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Zap className="h-5 w-5 text-violet-400" />
@@ -201,7 +201,7 @@ export default function DashboardPage() {
             <CardDescription>Sent vs Received (last 7 days)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ReactECharts option={weeklyActivityOption} style={{ height: 260 }} opts={{ renderer: "svg" }} />
+            <ReactECharts option={weeklyActivityOption} style={{ height: 220 }} opts={{ renderer: "svg" }} />
           </CardContent>
         </Card>
 
@@ -217,7 +217,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts Row 2 */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Activity Breakdown</CardTitle>
@@ -239,8 +239,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2 border-border/50 bg-card/80 backdrop-blur-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-4">
+        <Card className="md:col-span-1 lg:col-span-2 border-border/50 bg-card/80 backdrop-blur-sm">
+          <CardHeader className="pb-4">
             <div>
               <CardTitle className="text-base">Recent Activity</CardTitle>
               <CardDescription>Your latest actions</CardDescription>

@@ -205,3 +205,13 @@
 * {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Mobile touch UX improvements */
+@media (pointer: coarse) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  input, textarea, select, button, a {
+    touch-action: manipulation;
+  }
+}

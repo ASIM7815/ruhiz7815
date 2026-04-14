@@ -452,7 +452,7 @@ export default function MarketplacePage() {
                 placeholder="e.g. Data Structures textbook - Cormen"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Category</Label>
                 <Select value={form.category} onValueChange={(v) => v && setForm({ ...form, category: v })}>

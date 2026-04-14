@@ -360,8 +360,8 @@ export default function ProjectsPage() {
                       </div>
                       <div className="divide-y">
                         {project.pendingRequests.map((req) => (
-                          <div key={req.id} className="p-4 flex items-center gap-4">
-                            <Avatar className="h-10 w-10">
+                          <div key={req.id} className="p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                            <Avatar className="h-10 w-10 shrink-0">
                               <AvatarImage src={req.user.image || ""} />
                               <AvatarFallback>{req.user.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
                             </Avatar>
@@ -374,7 +374,7 @@ export default function ProjectsPage() {
                                 <p className="text-sm text-muted-foreground mt-1 line-clamp-2">&ldquo;{req.message}&rdquo;</p>
                               )}
                             </div>
-                            <div className="flex gap-2 shrink-0">
+                            <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
                               <Button
                                 size="sm"
                                 onClick={() => handleRequest(project.id, req.id, "ACCEPTED")}

@@ -120,7 +120,7 @@ export default function CreateProjectPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="timeline">Timeline</Label>
               <Input id="timeline" placeholder="e.g. 8 weeks" value={timeline} onChange={(e) => setTimeline(e.target.value)} />

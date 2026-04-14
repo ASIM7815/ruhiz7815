@@ -31,7 +31,7 @@ const notifications: {
 export default function NotificationsPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl md:text-3xl font-bold">
             Notifications
@@ -40,7 +40,7 @@ export default function NotificationsPage() {
             Stay updated on your projects and activities
           </p>
         </div>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="w-full sm:w-auto">
           <CheckCheck className="mr-2 h-4 w-4" />
           Mark All Read
         </Button>

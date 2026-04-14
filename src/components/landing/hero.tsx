@@ -108,10 +108,10 @@ function VibeText() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.4 }}
-      className="mt-14 flex items-center justify-center gap-3 text-lg text-muted-foreground"
+      className="mt-10 sm:mt-14 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 text-base sm:text-lg text-muted-foreground"
     >
       <span>Made for students who</span>
-      <span className="relative h-8 overflow-hidden w-56 text-left">
+      <span className="relative h-7 sm:h-8 overflow-hidden w-48 sm:w-56 text-center sm:text-left">
         {vibes.map((vibe, i) => (
           <motion.span
             key={vibe}

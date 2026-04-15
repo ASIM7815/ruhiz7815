@@ -18,22 +18,11 @@ export async function uploadToGCS(
   await file.save(buffer, {
     contentType,
     resumable: false,
-    public: true,
     metadata: { cacheControl: "public, max-age=31536000" },
   });
 
-  // Try object-level ACL (fine-grained access); skip if uniform bucket-level access is enabled
-  try {
-    await file.makePublic();
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("uniform bucket-level access")) {
-      // Bucket uses uniform access – public read must be granted via bucket IAM policy
-      console.info("[GCS] Uniform bucket-level access enabled; skipping makePublic()");
-    } else {
-      console.warn("[GCS] makePublic() failed:", msg);
-    }
-  }
+  // Public read access is granted via bucket-level IAM policy (allUsers:objectViewer)
+  // No need for file.makePublic() with Uniform Bucket-Level Access enabled
 
   return `https://storage.googleapis.com/${bucket.name}/${filePath}`;
 }

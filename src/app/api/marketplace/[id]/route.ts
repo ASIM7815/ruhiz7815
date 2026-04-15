@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { deleteFromGCS, extractGCSPath } from "@/lib/gcs";
 
 export async function PATCH(
   req: NextRequest,
@@ -49,6 +50,12 @@ export async function DELETE(
   }
   if (listing.sellerId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Delete image from GCS if present
+  if (listing.imageUrl) {
+    const gcsPath = extractGCSPath(listing.imageUrl);
+    if (gcsPath) await deleteFromGCS(gcsPath);
   }
 
   await db.listing.delete({ where: { id } });

@@ -91,7 +91,7 @@ export function Topbar() {
                 }}
               >
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={searchResult.image || ""} />
+                  <AvatarImage src={searchResult.image || undefined} />
                   <AvatarFallback>
                     {searchResult.name?.charAt(0)?.toUpperCase() || "U"}
                   </AvatarFallback>

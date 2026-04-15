@@ -163,7 +163,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-6">
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage src={profile?.image || ""} />
+                  <AvatarImage src={profile?.image || undefined} />
                   <AvatarFallback>
                     {profile?.name?.charAt(0)?.toUpperCase() || "U"}
                   </AvatarFallback>

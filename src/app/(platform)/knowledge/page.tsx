@@ -346,7 +346,7 @@ export default function KnowledgeHubPage() {
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full gap-2">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-6 w-6">
-                        <AvatarImage src={resource.author.image || ""} />
+                        <AvatarImage src={resource.author.image || undefined} />
                         <AvatarFallback>
                           {resource.author.name?.charAt(0)?.toUpperCase() || "U"}
                         </AvatarFallback>

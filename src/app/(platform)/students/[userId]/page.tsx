@@ -75,7 +75,7 @@ export default function PublicProfilePage() {
         <CardContent className="p-6">
           <div className="flex flex-col items-center text-center gap-4">
             <Avatar className="h-24 w-24 border-4 border-primary/20">
-              <AvatarImage src={user.image || ""} />
+              <AvatarImage src={user.image || undefined} />
               <AvatarFallback className="text-2xl">
                 {user.name?.charAt(0)?.toUpperCase() || "U"}
               </AvatarFallback>

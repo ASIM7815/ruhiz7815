@@ -286,7 +286,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                     {members.map((m) => (
                       <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={m.user?.image || ""} />
+                          <AvatarImage src={m.user?.image || undefined} />
                           <AvatarFallback>{m.user?.name?.charAt(0) || "?"}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
@@ -342,7 +342,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
               <div key={msg.id} className={cn("flex gap-2", isMe ? "flex-row-reverse" : "flex-row")}>
                 {!isMe && (
                   <Avatar className="h-7 w-7 mt-1">
-                    <AvatarImage src={getSenderImage(msg.sender_id) || ""} />
+                    <AvatarImage src={getSenderImage(msg.sender_id) || undefined} />
                     <AvatarFallback className="text-[10px]">{getSenderName(msg.sender_id).charAt(0)}</AvatarFallback>
                   </Avatar>
                 )}

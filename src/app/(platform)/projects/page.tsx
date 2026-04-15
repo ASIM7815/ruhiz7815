@@ -279,7 +279,7 @@ export default function ProjectsPage() {
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-6 w-6">
-                        <AvatarImage src={project.owner.image || ""} />
+                        <AvatarImage src={project.owner.image || undefined} />
                         <AvatarFallback>
                           {project.owner.name
                             .split(" ")
@@ -362,7 +362,7 @@ export default function ProjectsPage() {
                         {project.pendingRequests.map((req) => (
                           <div key={req.id} className="p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
                             <Avatar className="h-10 w-10 shrink-0">
-                              <AvatarImage src={req.user.image || ""} />
+                              <AvatarImage src={req.user.image || undefined} />
                               <AvatarFallback>{req.user.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">

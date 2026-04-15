@@ -331,7 +331,7 @@ export default function MarketplacePage() {
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage src={listing.seller.image || ""} />
+                          <AvatarImage src={listing.seller.image || undefined} />
                           <AvatarFallback>
                             {listing.seller.name?.split(" ").map((n: string) => n[0]).join("") || "U"}
                           </AvatarFallback>

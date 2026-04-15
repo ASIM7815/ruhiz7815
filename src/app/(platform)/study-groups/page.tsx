@@ -372,7 +372,7 @@ export default function StudyGroupsPage() {
                         {group.pendingRequests.map((req) => (
                           <div key={req.id} className="p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
                             <Avatar className="h-10 w-10 shrink-0">
-                              <AvatarImage src={req.user.image || ""} />
+                              <AvatarImage src={req.user.image || undefined} />
                               <AvatarFallback>{req.user.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">

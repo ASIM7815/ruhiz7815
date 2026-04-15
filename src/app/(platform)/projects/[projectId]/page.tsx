@@ -205,7 +205,7 @@ export default function ProjectDetailPage() {
                   className="flex items-center gap-3 p-3 rounded-lg border"
                 >
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src={member.image || ""} />
+                    <AvatarImage src={member.image || undefined} />
                     <AvatarFallback>
                       {member.name?.charAt(0)?.toUpperCase() || "U"}
                     </AvatarFallback>
@@ -286,7 +286,7 @@ export default function ProjectDetailPage() {
               <Separator />
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
-                  <AvatarImage src={project.owner.image || ""} />
+                  <AvatarImage src={project.owner.image || undefined} />
                   <AvatarFallback>
                     {project.owner.name?.charAt(0)?.toUpperCase() || "U"}
                   </AvatarFallback>

@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   turbopack: {
-    root: "/home/mohdasimsaad/Desktop/ruhiz",
+    root: process.cwd(),
   },
   images: {
     remotePatterns: [

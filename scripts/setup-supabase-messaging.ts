@@ -13,7 +13,7 @@ async function setup() {
   console.log("Creating messaging tables in Supabase...\n");
 
   // 1. conversations table
-  const { error: e1 } = await supabase.rpc("exec_sql", {
+  await supabase.rpc("exec_sql", {
     sql: `
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -82,7 +82,7 @@ async function setup() {
   ];
 
   for (const sql of statements) {
-    const res = await fetch(`${url}/rest/v1/rpc/`, {
+    await fetch(`${url}/rest/v1/rpc/`, {
       method: "POST",
       headers: {
         apikey: key,

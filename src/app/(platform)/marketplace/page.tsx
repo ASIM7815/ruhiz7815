@@ -8,23 +8,18 @@ import {
   Plus,
   ShoppingBag,
   Tag,
-  Upload,
   X,
   MessageCircle,
   Loader2,
   Package,
   CheckCircle2,
 } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -289,10 +284,12 @@ export default function MarketplacePage() {
                 >
                   <div className="relative h-48 overflow-hidden bg-muted">
                     {listing.imageUrl ? (
-                      <img
+                      <Image
                         src={listing.imageUrl}
                         alt={listing.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        fill
+                        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
@@ -390,7 +387,13 @@ export default function MarketplacePage() {
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className="h-16 w-16 shrink-0 rounded-lg overflow-hidden bg-muted">
                     {listing.imageUrl ? (
-                      <img src={listing.imageUrl} alt="" className="w-full h-full object-cover" />
+                      <Image
+                        src={listing.imageUrl}
+                        alt=""
+                        width={64}
+                        height={64}
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="h-6 w-6 text-muted-foreground/30" />

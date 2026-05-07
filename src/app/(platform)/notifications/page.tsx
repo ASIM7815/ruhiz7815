@@ -1,19 +1,8 @@
 import type React from "react";
-import {
-  Bell,
-  Users,
-  FolderKanban,
-  MessageSquare,
-  Star,
-  BookOpen,
-  ShoppingBag,
-  Check,
-  CheckCheck,
-} from "lucide-react";
+import { CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 
 const notifications: {
   id: string;

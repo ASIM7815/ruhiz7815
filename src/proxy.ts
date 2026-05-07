@@ -1,13 +1,5 @@
-import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
-
-const { auth } = NextAuth({
-  providers: [],
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-  },
-});
+import { auth } from "@/lib/auth";
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
@@ -38,7 +30,7 @@ export default auth((req) => {
 
   // Redirect to onboarding if not completed (check JWT claim)
   if (isPlatformPage && isLoggedIn) {
-    const onboardingComplete = (req.auth as any)?.user?.onboardingComplete;
+    const onboardingComplete = req.auth?.user?.onboardingComplete;
     if (onboardingComplete === false) {
       return NextResponse.redirect(new URL("/onboarding", req.nextUrl));
     }
@@ -46,7 +38,7 @@ export default auth((req) => {
 
   // Redirect away from onboarding if already completed
   if (isOnboardingPage && isLoggedIn) {
-    const onboardingComplete = (req.auth as any)?.user?.onboardingComplete;
+    const onboardingComplete = req.auth?.user?.onboardingComplete;
     if (onboardingComplete === true) {
       return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
     }

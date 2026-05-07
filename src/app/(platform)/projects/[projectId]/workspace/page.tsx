@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import {
   MessageSquare,
   CheckSquare,
@@ -32,12 +31,6 @@ const messages: { user: string; avatar: string; content: string; time: string; i
 const tasks: { title: string; status: string; assignee: string }[] = [];
 
 const files: { name: string; size: string; date: string }[] = [];
-
-const statusColors: Record<string, string> = {
-  todo: "bg-gray-100 text-gray-700",
-  "in-progress": "bg-blue-100 text-blue-700",
-  done: "bg-emerald-100 text-emerald-700",
-};
 
 export default function WorkspacePage() {
   return (

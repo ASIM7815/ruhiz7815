@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import {
   Search,
-  Plus,
   Rocket,
   Users,
   Target,

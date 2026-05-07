@@ -16,6 +16,8 @@ import {
   CheckCheck,
   User as UserIcon,
   Users,
+  Phone,
+  Video,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { GroupChat } from "@/components/group-chat";
+import { CallInterface } from "@/components/messaging/call-interface";
+import { useWebRTCCall, type CallMessage } from "@/hooks/use-webrtc-call";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -155,6 +159,30 @@ function MessagesPageContent() {
       // silently fail for polling
     }
   }, []);
+
+  const handleCallMessage = useCallback(
+    (conversationId: string, message: CallMessage) => {
+      if (selectedConversation === conversationId) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === message.id)) return prev;
+          return [...prev, message];
+        });
+      }
+      fetchConversations();
+    },
+    [fetchConversations, selectedConversation]
+  );
+
+  const call = useWebRTCCall({
+    currentUser: userId
+      ? {
+          id: userId,
+          image: session?.user?.image ?? null,
+          name: session?.user?.name ?? "Unknown",
+        }
+      : null,
+    onCallMessage: handleCallMessage,
+  });
 
   const fetchGroupConversations = useCallback(async () => {
     setGroupsLoading(true);
@@ -534,6 +562,20 @@ function MessagesPageContent() {
 
   return (
     <TooltipProvider>
+      <CallInterface
+        activeCall={call.activeCall}
+        cameraEnabled={call.cameraEnabled}
+        localStream={call.localStream}
+        micEnabled={call.micEnabled}
+        onAccept={call.acceptCall}
+        onEnd={call.endCall}
+        onReject={call.rejectCall}
+        onToggleCamera={call.toggleCamera}
+        onToggleMic={call.toggleMic}
+        onToggleScreenShare={call.toggleScreenShare}
+        remoteStream={call.remoteStream}
+        screenSharing={call.screenSharing}
+      />
       <div className="flex h-[calc(100dvh-4rem)] overflow-hidden -m-3 sm:-m-4 lg:-m-6">
         {/* ── Left Panel: Conversations ── */}
         <div
@@ -810,13 +852,57 @@ function MessagesPageContent() {
                     {getInitials(selectedParticipant.name)}
                   </AvatarFallback>
                 </Avatar>
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">
                     {selectedParticipant.name}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     UID: {selectedParticipant.uid}
                   </p>
+                </div>
+                <div className="ml-auto flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={!!call.activeCall}
+                          onClick={() =>
+                            call.startCall(
+                              selectedConversation,
+                              selectedParticipant,
+                              "audio"
+                            )
+                          }
+                        />
+                      }
+                    >
+                      <Phone className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Start audio call</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={!!call.activeCall}
+                          onClick={() =>
+                            call.startCall(
+                              selectedConversation,
+                              selectedParticipant,
+                              "video"
+                            )
+                          }
+                        />
+                      }
+                    >
+                      <Video className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Start video call</TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
 

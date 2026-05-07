@@ -2,6 +2,9 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Copy `.env.example` to `.env.local` and fill in the required values for your
+database, auth provider, and Supabase project.
+
 First, run the development server:
 
 ```bash
@@ -15,6 +18,14 @@ bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## Audio and Video Calls
+
+Direct messages support one-to-one peer-to-peer WebRTC audio/video calls. The
+browser sends media directly when possible, while Supabase Realtime is used only
+for signaling. Public STUN servers are configured by default. For production,
+add TURN credentials in `.env.local` so calls continue working on restrictive
+campus Wi-Fi and mobile networks.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

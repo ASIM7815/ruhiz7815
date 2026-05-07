@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import NextImage from "next/image";
 import { supabase } from "@/lib/supabase-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,6 @@ import {
   Image as ImageIcon,
   FileText,
   MapPin,
-  Settings,
   Users,
   LogOut,
   Shield,
@@ -359,10 +359,12 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                     )}
                   >
                     {msg.message_type === "IMAGE" && msg.file_url && (
-                      <img
+                      <NextImage
                         src={msg.file_url}
                         alt={msg.content || "Image"}
-                        className="rounded-lg max-w-full max-h-60 mb-1"
+                        width={320}
+                        height={240}
+                        className="mb-1 h-auto max-h-60 w-auto max-w-full rounded-lg object-contain"
                       />
                     )}
                     {msg.message_type === "PDF" && msg.file_url && (

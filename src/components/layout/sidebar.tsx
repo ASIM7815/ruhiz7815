@@ -8,8 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Search,
-  Bell,
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,26 +24,36 @@ import {
 import { platformNav, platformSecondaryNav } from "@/config/nav";
 import Image from "next/image";
 
-export function Sidebar() {
-  const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const { data: session } = useSession();
-  const userName = session?.user?.name ?? "";
-  const userEmail = session?.user?.email ?? "";
-  const userImage = session?.user?.image ?? undefined;
-  const userInitials = userName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+type SidebarNavItemsProps = {
+  collapsed: boolean;
+  mobile?: boolean;
+  pathname: string;
+  userEmail: string;
+  userImage?: string;
+  userInitials: string;
+  userName: string;
+};
 
-  const NavItems = ({ mobile = false }: { mobile?: boolean }) => (
+function SidebarNavItems({
+  collapsed,
+  mobile = false,
+  pathname,
+  userEmail,
+  userImage,
+  userInitials,
+  userName,
+}: SidebarNavItemsProps) {
+  return (
     <TooltipProvider delay={0}>
       <div className="flex flex-col h-full">
-        {/* Logo */}
         <div className="flex items-center gap-2 px-4 py-5 border-b">
-          <Image src="/logo.png" alt="RUHIZ" width={36} height={36} className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+          <Image
+            src="/logo.png"
+            alt="RUHIZ"
+            width={36}
+            height={36}
+            className="h-9 w-9 shrink-0 rounded-lg object-cover"
+          />
           {(!collapsed || mobile) && (
             <span className="font-heading text-xl font-bold tracking-tight">
               RUHIZ
@@ -53,7 +61,6 @@ export function Sidebar() {
           )}
         </div>
 
-        {/* Main nav */}
         <nav className="flex-1 px-3 py-4 space-y-1">
           <p
             className={cn(
@@ -131,9 +138,9 @@ export function Sidebar() {
               if (collapsed && !mobile) {
                 return (
                   <Tooltip key={item.title}>
-                  <TooltipTrigger render={<span />}>{link}</TooltipTrigger>
-                  <TooltipContent side="right">{item.title}</TooltipContent>
-                </Tooltip>
+                    <TooltipTrigger render={<span />}>{link}</TooltipTrigger>
+                    <TooltipContent side="right">{item.title}</TooltipContent>
+                  </Tooltip>
                 );
               }
               return link;
@@ -141,7 +148,6 @@ export function Sidebar() {
           </div>
         </nav>
 
-        {/* User section */}
         <div className="border-t px-3 py-4">
           <div
             className={cn(
@@ -176,6 +182,21 @@ export function Sidebar() {
       </div>
     </TooltipProvider>
   );
+}
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const { data: session } = useSession();
+  const userName = session?.user?.name ?? "";
+  const userEmail = session?.user?.email ?? "";
+  const userImage = session?.user?.image ?? undefined;
+  const userInitials = userName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <>
@@ -187,7 +208,14 @@ export function Sidebar() {
         )}
       >
         <div className="flex flex-col h-full relative">
-          <NavItems />
+          <SidebarNavItems
+            collapsed={collapsed}
+            pathname={pathname}
+            userEmail={userEmail}
+            userImage={userImage}
+            userInitials={userInitials}
+            userName={userName}
+          />
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-muted transition-colors"
@@ -207,7 +235,15 @@ export function Sidebar() {
           <Menu className="h-5 w-5" />
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-64">
-          <NavItems mobile />
+          <SidebarNavItems
+            collapsed={collapsed}
+            mobile
+            pathname={pathname}
+            userEmail={userEmail}
+            userImage={userImage}
+            userInitials={userInitials}
+            userName={userName}
+          />
         </SheetContent>
       </Sheet>
     </>

@@ -28,21 +28,8 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 
-  // Redirect to onboarding if not completed (check JWT claim)
-  if (isPlatformPage && isLoggedIn) {
-    const onboardingComplete = req.auth?.user?.onboardingComplete;
-    if (onboardingComplete === false) {
-      return NextResponse.redirect(new URL("/onboarding", req.nextUrl));
-    }
-  }
-
-  // Redirect away from onboarding if already completed
-  if (isOnboardingPage && isLoggedIn) {
-    const onboardingComplete = req.auth?.user?.onboardingComplete;
-    if (onboardingComplete === true) {
-      return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
-    }
-  }
+  // Skip onboarding - redirect directly to dashboard
+  // Onboarding check disabled - users go straight to dashboard after login
 
   return NextResponse.next();
 });

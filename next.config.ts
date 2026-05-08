@@ -20,6 +20,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Ensure Prisma client is bundled correctly
+  experimental: {
+    serverComponentsExternalPackages: ["@prisma/client", "@prisma/adapter-pg"],
+  },
 };
 
 export default nextConfig;

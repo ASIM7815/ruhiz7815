@@ -29,8 +29,9 @@ export async function GET(request: Request) {
     if (data.user) {
       // Sync user with our database
       const supabaseUser = data.user;
+      const provider = supabaseUser.app_metadata.provider || 'google'; // Get the OAuth provider
       
-      console.log("[auth/callback] Syncing user:", supabaseUser.email);
+      console.log("[auth/callback] Syncing user:", supabaseUser.email, "Provider:", provider);
       
       try {
         // Check if user exists in our database
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
         });
 
         if (!dbUser) {
-          // Create new user with unique UID
+          // Create new user with unique UID and store the provider
           const uid = String(Math.floor(10000 + Math.random() * 90000));
           
           console.log("[auth/callback] Creating new user with UID:", uid);
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
             data: {
               id: supabaseUser.id,
               email: supabaseUser.email!,
-              name: supabaseUser.user_metadata.full_name || supabaseUser.email!.split("@")[0],
+              name: supabaseUser.user_metadata.full_name || supabaseUser.user_metadata.user_name || supabaseUser.email!.split("@")[0],
               image: supabaseUser.user_metadata.avatar_url,
               uid,
               emailVerified: supabaseUser.email_confirmed_at ? new Date(supabaseUser.email_confirmed_at) : null,
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // Redirect to dashboard after successful login
-  console.log("[auth/callback] Redirecting to dashboard");
-  return NextResponse.redirect(`${origin}/dashboard`);
+  // Redirect to main page (home) after successful login
+  console.log("[auth/callback] Redirecting to home page");
+  return NextResponse.redirect(`${origin}/`);
 }

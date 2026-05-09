@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient, getUser } from "@/lib/supabase-auth-server";
+import { NextRequest } from "next/server";
+import { createClient, getUser, getSession } from "@/lib/supabase-auth-server";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const results: any = {
     timestamp: new Date().toISOString(),
     checks: {},
@@ -17,14 +18,32 @@ export async function GET() {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "✓ Set" : "✗ Missing",
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? "✓ Set" : "✗ Missing",
     DATABASE_URL: process.env.DATABASE_URL ? "✓ Set" : "✗ Missing",
+    NODE_ENV: process.env.NODE_ENV,
   };
 
-  // Check 2: Supabase client
+  // Check 2: Cookies
+  const cookies = request.cookies.getAll();
+  const supabaseCookies = cookies.filter(c => c.name.includes('supabase'));
+  results.checks.cookies = {
+    total: cookies.length,
+    supabaseCookies: supabaseCookies.length,
+    cookieNames: supabaseCookies.map(c => c.name),
+  };
+
+  // Check 3: Supabase client
   try {
     const supabase = await createClient();
     results.checks.supabaseClient = "✓ Client created";
 
-    // Check 3: Get user
+    // Check 4: Get session
+    const session = await getSession();
+    results.checks.supabaseSession = {
+      status: session ? "✓ Session found" : "✗ No session",
+      hasAccessToken: !!session?.access_token,
+      expiresAt: session?.expires_at || null,
+    };
+
+    // Check 5: Get user
     const user = await getUser();
     results.checks.supabaseUser = {
       status: user ? "✓ User found" : "✗ No user (not logged in)",
@@ -32,7 +51,7 @@ export async function GET() {
       email: user?.email || null,
     };
 
-    // Check 4: Database user
+    // Check 6: Database user
     if (user) {
       try {
         const dbUser = await db.user.findUnique({

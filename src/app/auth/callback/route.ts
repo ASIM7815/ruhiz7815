@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     console.log("[auth/callback] Exchange result:", { 
       hasUser: !!data?.user,
       hasSession: !!data?.session,
+      hasAccessToken: !!data?.session?.access_token,
       error: exchangeError?.message 
     });
 
@@ -46,9 +47,9 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/login?error=auth_failed`);
     }
 
-    if (!data?.user) {
-      console.error("[auth/callback] No user data received after exchange");
-      return NextResponse.redirect(`${origin}/login?error=no_user`);
+    if (!data?.user || !data?.session) {
+      console.error("[auth/callback] No user/session data received after exchange");
+      return NextResponse.redirect(`${origin}/login?error=no_session`);
     }
 
     // Sync user with our database

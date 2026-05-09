@@ -66,8 +66,13 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/students") ||
     pathname.startsWith("/onboarding");
 
-  // Redirect logged-in users away from auth pages
+  // Redirect logged-in users away from auth pages and home page to dashboard
   if (isAuthPage && isLoggedIn) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // Redirect logged-in users from home page to dashboard
+  if (pathname === "/" && isLoggedIn) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

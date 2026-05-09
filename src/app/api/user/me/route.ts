@@ -1,19 +1,19 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { user: authUser, error, status } = await requireAuth();
+  if (error || !authUser) {
+    return NextResponse.json({ error }, { status });
   }
 
   const user = await db.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: authUser.id },
     include: {
       skills: true,
       interests: true,
@@ -54,9 +54,9 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { user: authUser, error, status: authStatus } = await requireAuth();
+  if (error || !authUser) {
+    return NextResponse.json({ error }, { status: authStatus });
   }
 
   const body = await req.json();
@@ -78,26 +78,26 @@ export async function PATCH(req: NextRequest) {
   if (onboardingComplete !== undefined) data.onboardingComplete = onboardingComplete;
 
   const user = await db.user.update({
-    where: { id: session.user.id },
+    where: { id: authUser.id },
     data,
   });
 
   // Update skills if provided
   if (Array.isArray(skills)) {
-    await db.userSkill.deleteMany({ where: { userId: session.user.id } });
+    await db.userSkill.deleteMany({ where: { userId: authUser.id } });
     if (skills.length > 0) {
       await db.userSkill.createMany({
-        data: skills.map((skill: string) => ({ userId: session.user.id, skill })),
+        data: skills.map((skill: string) => ({ userId: authUser.id, skill })),
       });
     }
   }
 
   // Update interests if provided
   if (Array.isArray(interests)) {
-    await db.userInterest.deleteMany({ where: { userId: session.user.id } });
+    await db.userInterest.deleteMany({ where: { userId: authUser.id } });
     if (interests.length > 0) {
       await db.userInterest.createMany({
-        data: interests.map((interest: string) => ({ userId: session.user.id, interest })),
+        data: interests.map((interest: string) => ({ userId: authUser.id, interest })),
       });
     }
   }

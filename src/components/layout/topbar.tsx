@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useRouter } from "next/navigation";
 import { Search, Bell, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function Topbar() {
-  const { data: session } = useSession();
+  const { user } = useSupabaseUser();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [searchUid, setSearchUid] = useState("");
@@ -24,11 +24,11 @@ export function Topbar() {
   const [searching, setSearching] = useState(false);
   const [showResult, setShowResult] = useState(false);
 
-  const userImage = session?.user?.image ?? undefined;
-  const userName = session?.user?.name ?? "";
+  const userImage = user?.user_metadata?.avatar_url ?? undefined;
+  const userName = user?.user_metadata?.full_name ?? "";
   const userInitials = userName
     .split(" ")
-    .map((n) => n[0])
+    .map((n: string) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();

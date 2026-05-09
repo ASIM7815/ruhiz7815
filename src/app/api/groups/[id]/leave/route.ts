@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -23,7 +23,7 @@ export async function POST(
     .from("group_participants")
     .select("role")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!participant) {
@@ -44,7 +44,7 @@ export async function POST(
         .from("group_participants")
         .select("user_id")
         .eq("conversation_id", id)
-        .neq("user_id", session.user.id)
+        .neq("user_id", user.id)
         .limit(1);
 
       if (otherMembers && otherMembers.length > 0) {
@@ -58,13 +58,13 @@ export async function POST(
     }
   }
 
-  const { error } = await supabaseAdmin
+  const { error: dbError } = await supabaseAdmin
     .from("group_participants")
     .delete()
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id);
+    .eq("user_id", user.id);
 
-  if (error) {
+  if (dbError) {
     return NextResponse.json({ error: "Failed to leave" }, { status: 500 });
   }
 

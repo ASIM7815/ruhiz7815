@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,11 +17,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function OnboardingPage() {
-  const { data: session, update } = useSession();
+  const { user, loading: authLoading } = useSupabaseUser();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    name: session?.user?.name || "",
+    name: user?.user_metadata?.full_name || "",
     bio: "",
     university: "",
     role: "MEMBER",
@@ -37,7 +37,6 @@ export default function OnboardingPage() {
         body: JSON.stringify({ ...form, onboardingComplete: true }),
       });
       if (!res.ok) throw new Error("Failed to save profile");
-      await update(); // refresh session token
       router.push("/dashboard");
     } catch {
       setLoading(false);

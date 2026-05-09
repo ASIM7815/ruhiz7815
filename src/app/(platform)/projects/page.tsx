@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import {
   Plus,
   Search,
@@ -63,8 +63,8 @@ const statusColors: Record<string, string> = {
 };
 
 export default function ProjectsPage() {
-  const { data: session } = useSession();
-  const userId = session?.user?.id;
+  const { user } = useSupabaseUser();
+  const userId = user?.id;
 
   const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [projects, setProjects] = useState<Project[]>([]);

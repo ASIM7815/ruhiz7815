@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import NextImage from "next/image";
 import { supabase } from "@/lib/supabase-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -64,7 +64,7 @@ interface GroupChatProps {
 }
 
 export function GroupChat({ groupId, onBack }: GroupChatProps) {
-  const { data: session } = useSession();
+  const { user } = useSupabaseUser();
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [group, setGroup] = useState<GroupConvDetails | null>(null);
@@ -152,7 +152,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
     const optimistic: GroupMessage = {
       id: `temp-${Date.now()}`,
       conversation_id: groupId,
-      sender_id: session?.user?.id || "",
+      sender_id: user?.id || "",
       content,
       message_type: "TEXT",
       file_url: null,
@@ -247,7 +247,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   }
 
   function getSenderName(senderId: string) {
-    if (senderId === session?.user?.id) return "You";
+    if (senderId === user?.id) return "You";
     return userNames[senderId]?.name || "Unknown";
   }
 
@@ -297,7 +297,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                             </Badge>
                           </div>
                         </div>
-                        {isAdmin && m.user_id !== session?.user?.id && (
+                        {isAdmin && m.user_id !== user?.id && (
                           <div className="flex gap-1">
                             {m.role === "MEMBER" ? (
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMakeAdmin(m.user_id)} title="Make Admin">
@@ -337,7 +337,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="space-y-3">
           {messages.map((msg) => {
-            const isMe = msg.sender_id === session?.user?.id;
+            const isMe = msg.sender_id === user?.id;
             return (
               <div key={msg.id} className={cn("flex gap-2", isMe ? "flex-row-reverse" : "flex-row")}>
                 {!isMe && (

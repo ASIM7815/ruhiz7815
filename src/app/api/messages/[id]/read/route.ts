@@ -1,5 +1,5 @@
 
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -10,13 +10,13 @@ export async function PATCH(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id: conversationId } = await params;
-  const userId = session.user.id;
+  const userId = user.id;
 
   // Verify user is a participant
   const { data: participant } = await supabaseAdmin

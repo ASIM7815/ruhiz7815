@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { uploadToGCS, deleteFromGCS } from "@/lib/gcs";
 
@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { user, error, status } = await requireAuth();
+    if (error || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest) {
     // Delete old avatar if it's a GCS URL (best-effort, don't fail upload if this errors)
     try {
       const currentUser = await db.user.findUnique({
-        where: { id: session.user.id },
+        where: { id: user.id },
         select: { image: true },
       });
       if (currentUser?.image?.includes("storage.googleapis.com")) {
@@ -46,11 +46,11 @@ export async function PATCH(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const gcsPath = `avatars/${session.user.id}.${ext}`;
+    const gcsPath = `avatars/${user.id}.${ext}`;
     const url = await uploadToGCS(buffer, gcsPath, file.type);
 
     await db.user.update({
-      where: { id: session.user.id },
+      where: { id: user.id },
       data: { image: url },
     });
 

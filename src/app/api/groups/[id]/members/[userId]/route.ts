@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -23,7 +23,7 @@ export async function PATCH(
     .from("group_participants")
     .select("role")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!myParticipant || myParticipant.role !== "ADMIN") {
@@ -44,13 +44,13 @@ export async function PATCH(
     return NextResponse.json({ error: "No updates" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { error: dbError } = await supabaseAdmin
     .from("group_participants")
     .update(updates)
     .eq("conversation_id", id)
     .eq("user_id", userId);
 
-  if (error) {
+  if (dbError) {
     return NextResponse.json({ error: "Failed to update" }, { status: 500 });
   }
 
@@ -62,8 +62,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -74,7 +74,7 @@ export async function DELETE(
     .from("group_participants")
     .select("role")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!myParticipant || myParticipant.role !== "ADMIN") {
@@ -82,17 +82,17 @@ export async function DELETE(
   }
 
   // Cannot remove yourself as admin
-  if (userId === session.user.id) {
+  if (userId === user.id) {
     return NextResponse.json({ error: "Cannot remove yourself" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { error: dbError } = await supabaseAdmin
     .from("group_participants")
     .delete()
     .eq("conversation_id", id)
     .eq("user_id", userId);
 
-  if (error) {
+  if (dbError) {
     return NextResponse.json({ error: "Failed to remove" }, { status: 500 });
   }
 

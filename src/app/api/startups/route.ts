@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -15,11 +15,11 @@ export async function GET(req: NextRequest) {
   if (stage) where.stage = stage;
 
   if (founderFilter === "me") {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { user, error, status } = await requireAuth();
+    if (error || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    where.founderId = session.user.id;
+    where.founderId = user.id;
   }
 
   const startups = await db.startup.findMany({
@@ -56,8 +56,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -75,10 +75,10 @@ export async function POST(req: NextRequest) {
       solution,
       stage: stage || "IDEA",
       lookingFor: lookingFor || null,
-      founderId: session.user.id,
+      founderId: user.id,
       members: {
         create: {
-          userId: session.user.id,
+          userId: user.id,
           role: "FOUNDER",
         },
       },

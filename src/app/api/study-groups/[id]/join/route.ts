@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -33,7 +33,7 @@ export async function POST(
 
   // Check if already a member
   const existing = await db.studyGroupMember.findUnique({
-    where: { groupId_userId: { groupId: id, userId: session.user.id } },
+    where: { groupId_userId: { groupId: id, userId: user.id } },
   });
   if (existing) {
     return NextResponse.json({ error: "Already a member" }, { status: 400 });
@@ -41,7 +41,7 @@ export async function POST(
 
   // Check existing request
   const existingReq = await db.studyGroupJoinRequest.findUnique({
-    where: { groupId_userId: { groupId: id, userId: session.user.id } },
+    where: { groupId_userId: { groupId: id, userId: user.id } },
   });
   if (existingReq?.status === "PENDING") {
     return NextResponse.json({ error: "You already have a pending request" }, { status: 400 });
@@ -54,7 +54,7 @@ export async function POST(
     });
   } else {
     await db.studyGroupJoinRequest.create({
-      data: { groupId: id, userId: session.user.id },
+      data: { groupId: id, userId: user.id },
     });
   }
 
@@ -66,8 +66,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -75,7 +75,7 @@ export async function GET(
 
   // Check if user is a leader
   const membership = await db.studyGroupMember.findUnique({
-    where: { groupId_userId: { groupId: id, userId: session.user.id } },
+    where: { groupId_userId: { groupId: id, userId: user.id } },
   });
   if (!membership || membership.role !== "LEADER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

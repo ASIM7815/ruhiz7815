@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { uploadToGCS } from "@/lib/gcs";
 
 export const runtime = "nodejs";
@@ -33,8 +33,8 @@ const ALLOWED_TYPES: Record<string, string[]> = {
 };
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -60,11 +60,11 @@ export async function POST(req: NextRequest) {
 
   let gcsPath: string;
   if (type === "avatar") {
-    gcsPath = `avatars/${session.user.id}.${ext}`;
+    gcsPath = `avatars/${user.id}.${ext}`;
   } else if (type === "project") {
-    gcsPath = `projects/${entityId || session.user.id}/${Date.now()}-${file.name}`;
+    gcsPath = `projects/${entityId || user.id}/${Date.now()}-${file.name}`;
   } else {
-    gcsPath = `notes/${entityId || session.user.id}/${Date.now()}-${file.name}`;
+    gcsPath = `notes/${entityId || user.id}/${Date.now()}-${file.name}`;
   }
 
   const url = await uploadToGCS(buffer, gcsPath, file.type);

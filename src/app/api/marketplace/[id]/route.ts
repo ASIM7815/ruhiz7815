@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { deleteFromGCS, extractGCSPath } from "@/lib/gcs";
 
@@ -11,8 +11,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -22,7 +22,7 @@ export async function PATCH(
   if (!listing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (listing.sellerId !== session.user.id) {
+  if (listing.sellerId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -41,8 +41,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -52,7 +52,7 @@ export async function DELETE(
   if (!listing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (listing.sellerId !== session.user.id) {
+  if (listing.sellerId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

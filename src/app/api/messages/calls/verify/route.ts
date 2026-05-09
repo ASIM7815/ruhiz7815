@@ -1,6 +1,6 @@
 
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { getConversationPeer, getIceServers, isCallKind } from "../utils";
 
@@ -8,8 +8,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -37,9 +37,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { error, peer } = await getConversationPeer(
+  const { error: peerError, peer } = await getConversationPeer(
     conversationId,
-    session.user.id
+    user.id
   );
 
   if (error || !peer || peer.id !== callerId) {

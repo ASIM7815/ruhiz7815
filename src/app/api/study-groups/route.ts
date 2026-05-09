@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -35,13 +35,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Check that user has uploaded at least 1 resource
-  const uploadCount = await db.resource.count({ where: { authorId: session.user.id } });
+  const uploadCount = await db.resource.count({ where: { authorId: user.id } });
   if (uploadCount === 0) {
     return NextResponse.json(
       { error: "You must upload at least 1 resource to the Knowledge Hub before creating a study group." },
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       maxMembers: maxMembers || 10,
       members: {
         create: {
-          userId: session.user.id,
+          userId: user.id,
           role: "LEADER",
         },
       },

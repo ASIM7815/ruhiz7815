@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { supabaseAdmin as supabase } from "@/lib/supabase-server";
 
@@ -11,9 +11,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; requestId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { user, error, status: authStatus } = await requireAuth();
+  if (error || !user) {
+    return NextResponse.json({ error }, { status: authStatus });
   }
 
   const { id, requestId } = await params;
@@ -25,7 +25,7 @@ export async function PATCH(
 
   // Verify leader
   const membership = await db.studyGroupMember.findUnique({
-    where: { groupId_userId: { groupId: id, userId: session.user.id } },
+    where: { groupId_userId: { groupId: id, userId: user.id } },
   });
   if (!membership || membership.role !== "LEADER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -70,7 +70,7 @@ export async function PATCH(
           .from("group_conversations")
           .insert({
             name: group.name,
-            created_by: session.user.id,
+            created_by: user.id,
             source_type: "study_group",
             source_id: id,
           })
@@ -85,7 +85,7 @@ export async function PATCH(
         // Add leader as admin
         await supabase.from("group_participants").insert({
           conversation_id: convId,
-          user_id: session.user.id,
+          user_id: user.id,
           role: "admin",
         });
       }

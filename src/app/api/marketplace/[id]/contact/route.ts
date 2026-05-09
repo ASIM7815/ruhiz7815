@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { supabaseAdmin as supabase } from "@/lib/supabase-server";
 
@@ -11,8 +11,8 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -26,11 +26,11 @@ export async function POST(
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
 
-  if (listing.sellerId === session.user.id) {
+  if (listing.sellerId === user.id) {
     return NextResponse.json({ error: "Cannot buy your own listing" }, { status: 400 });
   }
 
-  const buyerId = session.user.id;
+  const buyerId = user.id;
   const sellerId = listing.sellerId;
 
   // Check for existing conversation between buyer and seller

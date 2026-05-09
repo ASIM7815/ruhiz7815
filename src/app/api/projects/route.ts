@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -17,11 +17,11 @@ export async function GET(req: NextRequest) {
   if (status) where.status = status;
 
   if (ownerFilter === "me") {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { user, error, status } = await requireAuth();
+    if (error || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    where.ownerId = session.user.id;
+    where.ownerId = user.id;
   }
 
   const projects = await db.project.findMany({
@@ -57,8 +57,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -76,13 +76,13 @@ export async function POST(req: NextRequest) {
       description,
       timeline: timeline || null,
       maxMembers: maxMembers || 4,
-      ownerId: session.user.id,
+      ownerId: user.id,
       skills: {
         create: (skills || []).map((skill: string) => ({ skill })),
       },
       members: {
         create: {
-          userId: session.user.id,
+          userId: user.id,
           role: "LEADER",
         },
       },

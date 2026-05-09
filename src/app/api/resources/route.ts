@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -17,11 +17,11 @@ export async function GET(req: NextRequest) {
   if (type) where.type = type;
 
   if (authorFilter === "me") {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { user, error, status } = await requireAuth();
+    if (error || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    where.authorId = session.user.id;
+    where.authorId = user.id;
   }
 
   const resources = await db.resource.findMany({
@@ -55,8 +55,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       type,
       fileUrl: fileUrl || null,
       university: university || null,
-      authorId: session.user.id,
+      authorId: user.id,
     },
   });
 

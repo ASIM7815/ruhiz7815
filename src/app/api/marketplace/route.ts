@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -17,11 +17,11 @@ export async function GET(req: NextRequest) {
   if (category) where.category = category;
 
   if (sellerFilter === "me") {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { user, error, status } = await requireAuth();
+    if (error || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    where.sellerId = session.user.id;
+    where.sellerId = user.id;
     delete where.sold; // Show all own listings including sold
   }
 
@@ -56,8 +56,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       category,
       condition: condition || null,
       imageUrl: imageUrl || null,
-      sellerId: session.user.id,
+      sellerId: user.id,
     },
   });
 

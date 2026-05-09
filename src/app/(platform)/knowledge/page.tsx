@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 
 interface Resource {
   id: string;
@@ -69,7 +69,7 @@ const typeColors: Record<string, string> = {
 };
 
 export default function KnowledgeHubPage() {
-  const { data: session } = useSession();
+  const { user } = useSupabaseUser();
   const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [resources, setResources] = useState<Resource[]>([]);
   const [myResources, setMyResources] = useState<Resource[]>([]);
@@ -376,7 +376,7 @@ export default function KnowledgeHubPage() {
                         <Download className="h-3.5 w-3.5 sm:mr-1" />
                         <span className="hidden sm:inline">Download</span>
                       </Button>
-                      {session?.user?.id === resource.author.id && (
+                      {user?.id === resource.author.id && (
                         <Button
                           variant="ghost"
                           size="sm"

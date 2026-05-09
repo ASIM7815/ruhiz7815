@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import {
   Search,
   Rocket,
@@ -78,8 +78,8 @@ const stageIcons: Record<string, typeof Lightbulb> = {
 };
 
 export default function StartupsPage() {
-  const { data: session } = useSession();
-  const userId = session?.user?.id;
+  const { user } = useSupabaseUser();
+  const userId = user?.id;
 
   const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [startups, setStartups] = useState<Startup[]>([]);

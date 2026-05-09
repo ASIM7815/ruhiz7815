@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -23,20 +23,20 @@ export async function GET(
     .from("group_participants")
     .select("role, can_share_media")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!participant) {
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
 
-  const { data: conv, error } = await supabaseAdmin
+  const { data: conv, error: convError } = await supabaseAdmin
     .from("group_conversations")
     .select("*")
     .eq("id", id)
     .single();
 
-  if (error || !conv) {
+  if (convError || !conv) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
 
@@ -52,8 +52,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -64,7 +64,7 @@ export async function PATCH(
     .from("group_participants")
     .select("role")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!participant || participant.role !== "ADMIN") {
@@ -76,12 +76,12 @@ export async function PATCH(
   if (body.name) updates.name = String(body.name).slice(0, 100);
   if (body.image_url) updates.image_url = body.image_url;
 
-  const { error } = await supabaseAdmin
+  const { error: dbError } = await supabaseAdmin
     .from("group_conversations")
     .update(updates)
     .eq("id", id);
 
-  if (error) {
+  if (dbError) {
     return NextResponse.json({ error: "Failed to update" }, { status: 500 });
   }
 

@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { db } from "@/lib/db";
 
@@ -12,8 +12,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -24,7 +24,7 @@ export async function GET(
     .from("group_participants")
     .select("role")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!myParticipant) {
@@ -32,13 +32,13 @@ export async function GET(
   }
 
   // Get all participants
-  const { data: participants, error } = await supabaseAdmin
+  const { data: participants, error: dbError } = await supabaseAdmin
     .from("group_participants")
     .select("*")
     .eq("conversation_id", id)
     .order("joined_at", { ascending: true });
 
-  if (error) {
+  if (dbError) {
     return NextResponse.json({ error: "Failed to load members" }, { status: 500 });
   }
 
@@ -76,8 +76,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -88,7 +88,7 @@ export async function POST(
     .from("group_participants")
     .select("role")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!myParticipant || myParticipant.role !== "ADMIN") {
@@ -112,7 +112,7 @@ export async function POST(
     return NextResponse.json({ error: "Already a member" }, { status: 409 });
   }
 
-  const { error } = await supabaseAdmin
+  const { error: dbError } = await supabaseAdmin
     .from("group_participants")
     .insert({
       conversation_id: id,
@@ -120,7 +120,7 @@ export async function POST(
       role: "MEMBER",
     });
 
-  if (error) {
+  if (dbError) {
     return NextResponse.json({ error: "Failed to add member" }, { status: 500 });
   }
 

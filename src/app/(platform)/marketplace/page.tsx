@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import {
   Search,
   Plus,
@@ -64,8 +64,8 @@ const categoryColors: Record<string, string> = {
 
 export default function MarketplacePage() {
   const router = useRouter();
-  const { data: session } = useSession();
-  const userId = session?.user?.id;
+  const { user } = useSupabaseUser();
+  const userId = user?.id;
 
   const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [listings, setListings] = useState<Listing[]>([]);

@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -26,7 +26,7 @@ export async function GET(
     .from("group_participants")
     .select("id")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!participant) {
@@ -44,8 +44,8 @@ export async function GET(
     query = query.lt("created_at", cursor);
   }
 
-  const { data: messages, error } = await query;
-  if (error) {
+  const { data: messages, error: dbError } = await query;
+  if (dbError) {
     return NextResponse.json({ error: "Failed to load messages" }, { status: 500 });
   }
 
@@ -61,8 +61,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -73,7 +73,7 @@ export async function POST(
     .from("group_participants")
     .select("role, can_share_media")
     .eq("conversation_id", id)
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!participant) {
@@ -98,11 +98,11 @@ export async function POST(
     return NextResponse.json({ error: "Media sharing not allowed" }, { status: 403 });
   }
 
-  const { data: message, error } = await supabaseAdmin
+  const { data: message, error: dbError } = await supabaseAdmin
     .from("group_messages")
     .insert({
       conversation_id: id,
-      sender_id: session.user.id,
+      sender_id: user.id,
       content,
       message_type: messageType,
       file_url: fileUrl,
@@ -110,7 +110,7 @@ export async function POST(
     .select()
     .single();
 
-  if (error) {
+  if (dbError) {
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
   }
 

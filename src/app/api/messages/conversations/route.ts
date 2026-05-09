@@ -1,6 +1,6 @@
 
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
 
 // GET /api/messages/conversations — list all conversations for the current user
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
 
   // Get conversation IDs where user is a participant
   const { data: participations } = await supabaseAdmin
@@ -102,12 +102,12 @@ export async function GET() {
 
 // POST /api/messages/conversations — create or get existing conversation
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
   const { targetUserId } = await req.json();
 
   if (!targetUserId || typeof targetUserId !== "string") {

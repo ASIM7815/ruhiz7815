@@ -1,6 +1,6 @@
 
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -10,12 +10,12 @@ const MAX_MESSAGE_LENGTH = 5000;
 
 // POST /api/messages/send — send a plaintext message
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
   const { conversationId, content } = await req.json();
 
   if (!conversationId || typeof conversationId !== "string") {

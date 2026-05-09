@@ -1,6 +1,6 @@
 
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 // GET /api/groups — list user's group conversations
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -17,7 +17,7 @@ export async function GET() {
   const { data: participations, error: pErr } = await supabaseAdmin
     .from("group_participants")
     .select("conversation_id, role")
-    .eq("user_id", session.user.id);
+    .eq("user_id", user.id);
 
   if (pErr || !participations?.length) {
     return NextResponse.json([]);

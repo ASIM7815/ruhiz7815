@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,13 +31,13 @@ export async function POST(
   }
 
   // Can't join your own project
-  if (project.ownerId === session.user.id) {
+  if (project.ownerId === user.id) {
     return NextResponse.json({ error: "You own this project" }, { status: 400 });
   }
 
   // Check if already a member
   const existingMember = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId, userId: session.user.id } },
+    where: { projectId_userId: { projectId, userId: user.id } },
   });
 
   if (existingMember) {
@@ -46,7 +46,7 @@ export async function POST(
 
   // Check for existing request
   const existingRequest = await db.joinRequest.findUnique({
-    where: { projectId_userId: { projectId, userId: session.user.id } },
+    where: { projectId_userId: { projectId, userId: user.id } },
   });
 
   if (existingRequest) {
@@ -64,7 +64,7 @@ export async function POST(
   }
 
   await db.joinRequest.create({
-    data: { projectId, userId: session.user.id, message },
+    data: { projectId, userId: user.id, message },
   });
 
   return NextResponse.json({ success: true, status: "PENDING" });
@@ -75,8 +75,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -88,7 +88,7 @@ export async function GET(
     select: { ownerId: true },
   });
 
-  if (!project || project.ownerId !== session.user.id) {
+  if (!project || project.ownerId !== user.id) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 

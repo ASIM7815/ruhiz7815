@@ -1,6 +1,6 @@
 
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
@@ -8,12 +8,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
+    return NextResponse.json({ error: error || "Unauthorized" }, { status: status || 401 });
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
 
   // Fetch counts in parallel
   const [
@@ -118,7 +118,7 @@ export async function GET() {
 
   recentProjects.forEach((p) => {
     activity.push({
-      user: session.user?.name || "You",
+      user: user.name || "You",
       action: p.status === "OPEN" ? "created project" : "updated",
       target: p.title,
       time: p.updatedAt.toISOString(),
@@ -128,7 +128,7 @@ export async function GET() {
 
   recentResources.forEach((r) => {
     activity.push({
-      user: session.user?.name || "You",
+      user: user.name || "You",
       action: "uploaded",
       target: r.title,
       time: r.createdAt.toISOString(),

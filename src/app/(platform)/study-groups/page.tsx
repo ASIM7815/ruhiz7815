@@ -12,7 +12,7 @@ import {
   Clock,
   Upload,
 } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,8 +59,8 @@ interface MyGroup extends StudyGroup {
 }
 
 export default function StudyGroupsPage() {
-  const { data: session } = useSession();
-  const userId = session?.user?.id;
+  const { user } = useSupabaseUser();
+  const userId = user?.id;
 
   const [tab, setTab] = useState<"browse" | "mine">("browse");
   const [groups, setGroups] = useState<StudyGroup[]>([]);

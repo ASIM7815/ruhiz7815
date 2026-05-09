@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState, useRef, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase-client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -120,8 +120,8 @@ const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 // ── Component ──────────────────────────────────────────────────────
 
 function MessagesPageContent() {
-  const { data: session } = useSession();
-  const userId = session?.user?.id;
+  const { user } = useSupabaseUser();
+  const userId = user?.id;
   const searchParams = useSearchParams();
   const initialConversation = searchParams.get("conversation");
 
@@ -177,8 +177,8 @@ function MessagesPageContent() {
     currentUser: userId
       ? {
           id: userId,
-          image: session?.user?.image ?? null,
-          name: session?.user?.name ?? "Unknown",
+          image: user?.user_metadata?.avatar_url ?? null,
+          name: user?.user_metadata?.full_name ?? "Unknown",
         }
       : null,
     onCallMessage: handleCallMessage,
@@ -550,7 +550,7 @@ function MessagesPageContent() {
 
   // ── Loading state ──────────────────────────────────────────────
 
-  if (!session) {
+  if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

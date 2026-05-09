@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSupabaseUser, signOut } from "@/hooks/use-supabase-user";
 import {
   ChevronLeft,
   ChevronRight,
@@ -172,7 +172,7 @@ function SidebarNavItems({
                 variant="ghost"
                 size="icon"
                 className="shrink-0 h-8 w-8"
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                onClick={() => signOut()}
               >
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -187,13 +187,13 @@ function SidebarNavItems({
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const { data: session } = useSession();
-  const userName = session?.user?.name ?? "";
-  const userEmail = session?.user?.email ?? "";
-  const userImage = session?.user?.image ?? undefined;
+  const { user } = useSupabaseUser();
+  const userName = user?.user_metadata?.full_name ?? "";
+  const userEmail = user?.email ?? "";
+  const userImage = user?.user_metadata?.avatar_url ?? undefined;
   const userInitials = userName
     .split(" ")
-    .map((n) => n[0])
+    .map((n: string) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();

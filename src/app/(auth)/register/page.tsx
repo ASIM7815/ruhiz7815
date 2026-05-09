@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { createClient } from "@/lib/supabase-auth-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,6 +16,22 @@ import Image from "next/image";
 
 export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const supabase = createClient();
+
+  const handleGoogleSignup = async () => {
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      console.error("Error signing up:", error);
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -37,7 +53,7 @@ export default function RegisterPage() {
             className="w-full h-12 text-base font-medium"
             type="button"
             disabled={isLoading}
-            onClick={() => { setIsLoading(true); signIn("google", { callbackUrl: "/dashboard" }); }}
+            onClick={handleGoogleSignup}
           >
             <svg className="mr-3 h-5 w-5" viewBox="0 0 24 24">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />

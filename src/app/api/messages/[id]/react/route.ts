@@ -1,6 +1,6 @@
 
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -11,13 +11,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id: messageId } = await params;
-  const userId = session.user.id;
+  const userId = user.id;
   const { emoji } = await req.json();
 
   if (!emoji || typeof emoji !== "string") {
@@ -81,27 +81,27 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id: messageId } = await params;
-  const userId = session.user.id;
+  const userId = user.id;
   const { emoji } = await req.json();
 
   if (!emoji || typeof emoji !== "string") {
     return Response.json({ error: "emoji is required" }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin
+  const { error: dbError } = await supabaseAdmin
     .from("message_reactions")
     .delete()
     .eq("message_id", messageId)
     .eq("user_id", userId)
     .eq("emoji", emoji);
 
-  if (error) {
+  if (dbError) {
     return Response.json({ error: "Reaction not found" }, { status: 404 });
   }
 

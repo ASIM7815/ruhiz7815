@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-server";
 
@@ -12,8 +12,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string; requestId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -25,7 +25,7 @@ export async function PATCH(
     select: { id: true, ownerId: true, title: true },
   });
 
-  if (!project || project.ownerId !== session.user.id) {
+  if (!project || project.ownerId !== user.id) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
@@ -91,7 +91,7 @@ export async function PATCH(
         name: project.title,
         type: "PROJECT",
         entity_id: projectId,
-        created_by: session.user.id,
+        created_by: user.id,
       })
       .select("id")
       .single();
@@ -99,7 +99,7 @@ export async function PATCH(
     if (newGroup) {
       // Add owner as admin and accepted user as member
       await supabaseAdmin.from("group_participants").insert([
-        { conversation_id: newGroup.id, user_id: session.user.id, role: "ADMIN" },
+        { conversation_id: newGroup.id, user_id: user.id, role: "ADMIN" },
         { conversation_id: newGroup.id, user_id: joinRequest.userId, role: "MEMBER" },
       ]);
     }

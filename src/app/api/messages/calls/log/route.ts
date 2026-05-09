@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import {
   formatCallLogContent,
@@ -20,9 +20,9 @@ const callLogStatuses = new Set<CallLogStatus>([
 ]);
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const { user, error, status: authStatus } = await requireAuth();
+  if (error || !user) {
+    return Response.json({ error }, { status: authStatus });
   }
 
   const { conversationId, durationSeconds, kind, status } = await req.json();
@@ -45,10 +45,10 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid call status" }, { status: 400 });
   }
 
-  const { error } = await getConversationPeer(conversationId, session.user.id);
+  const { error: peerError } = await getConversationPeer(conversationId, user.id);
 
-  if (error) {
-    return Response.json({ error }, { status: 403 });
+  if (peerError) {
+    return Response.json({ error: peerError }, { status: 403 });
   }
 
   const content = formatCallLogContent(kind, status, durationSeconds);
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     .insert({
       content,
       conversation_id: conversationId,
-      sender_id: session.user.id,
+      sender_id: user.id,
     })
     .select("id, content, sender_id, is_read, created_at")
     .single();

@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -11,8 +11,8 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -25,7 +25,7 @@ export async function POST(
 
   // Check if already a member
   const existing = await db.startupMember.findUnique({
-    where: { startupId_userId: { startupId: id, userId: session.user.id } },
+    where: { startupId_userId: { startupId: id, userId: user.id } },
   });
   if (existing) {
     return NextResponse.json({ error: "Already a member" }, { status: 400 });
@@ -33,7 +33,7 @@ export async function POST(
 
   // Check existing request
   const existingReq = await db.startupJoinRequest.findUnique({
-    where: { startupId_userId: { startupId: id, userId: session.user.id } },
+    where: { startupId_userId: { startupId: id, userId: user.id } },
   });
   if (existingReq?.status === "PENDING") {
     return NextResponse.json({ error: "You already have a pending request" }, { status: 400 });
@@ -46,7 +46,7 @@ export async function POST(
     });
   } else {
     await db.startupJoinRequest.create({
-      data: { startupId: id, userId: session.user.id },
+      data: { startupId: id, userId: user.id },
     });
   }
 
@@ -58,15 +58,15 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
 
   const startup = await db.startup.findUnique({ where: { id } });
-  if (!startup || startup.founderId !== session.user.id) {
+  if (!startup || startup.founderId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -45,9 +45,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const gcsPath = `avatars/${user.id}.${ext}`;
-    const url = await uploadToGCS(buffer, gcsPath, file.type);
+    const url = await uploadToGCS(buffer, file.name, file.type, "PROFILES", user.id);
 
     await db.user.update({
       where: { id: user.id },

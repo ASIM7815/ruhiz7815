@@ -129,7 +129,7 @@ export default function MarketplacePage() {
     if (file) {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("type", "listing");
+      formData.append("type", "marketplace");
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
       if (uploadRes.ok) {
         const data = await uploadRes.json();

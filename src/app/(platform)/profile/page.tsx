@@ -173,7 +173,7 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {user.skills.length > 0 ? (
+              {user.skills && user.skills.length > 0 ? (
                 user.skills.map((skill) => (
                   <Badge key={skill} variant="secondary">
                     {skill}
@@ -193,7 +193,7 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {user.interests.length > 0 ? (
+              {user.interests && user.interests.length > 0 ? (
                 user.interests.map((interest) => (
                   <Badge key={interest} variant="outline">
                     {interest}

@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       solution: s.solution,
       stage: s.stage,
       lookingFor: s.lookingFor,
-      createdAt: s.createdAt,
+      createdAt: s.createdAt.toISOString(),
       founder: s.founder,
       members: s.members.map((m) => ({
         id: m.user.id,

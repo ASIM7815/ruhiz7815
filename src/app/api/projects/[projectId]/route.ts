@@ -40,7 +40,7 @@ export async function GET(
     status: project.status,
     timeline: project.timeline,
     maxMembers: project.maxMembers,
-    createdAt: project.createdAt,
+    createdAt: project.createdAt.toISOString(),
     skills: project.skills.map((s) => s.skill),
     owner: project.owner,
     members: project.members.map((m) => ({
@@ -50,6 +50,10 @@ export async function GET(
       uid: m.user.uid,
       role: m.role,
     })),
-    tasks: project.tasks,
+    tasks: project.tasks.map((t) => ({
+      ...t,
+      createdAt: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt.toISOString(),
+    })),
   });
 }

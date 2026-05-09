@@ -126,10 +126,12 @@ export default function ProfilePage() {
                     </span>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="w-full sm:w-auto shrink-0" render={<Link href="/settings" />}>
+                <Link href="/settings">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto shrink-0">
                     <Edit className="mr-2 h-3 w-3" />
                     Edit Profile
-                </Button>
+                  </Button>
+                </Link>
               </div>
               {user.bio && (
                 <p className="text-muted-foreground mt-3 text-sm leading-relaxed">

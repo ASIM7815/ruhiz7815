@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       university: r.university,
       rating: r.rating,
       downloads: r.downloads,
-      createdAt: r.createdAt,
+      createdAt: r.createdAt.toISOString(),
       author: r.author,
     })),
     nextCursor: hasMore ? items[items.length - 1].id : null,

@@ -42,7 +42,7 @@ export async function GET() {
     role: user.role,
     reputation: user.reputation,
     onboardingComplete: user.onboardingComplete,
-    createdAt: user.createdAt,
+    createdAt: user.createdAt.toISOString(),
     skills: user.skills.map((s) => s.skill),
     interests: user.interests.map((i) => i.interest),
     stats: {

@@ -28,7 +28,7 @@ export async function GET() {
       description: g.description,
       maxMembers: g.maxMembers,
       memberCount: g._count.members,
-      createdAt: g.createdAt,
+      createdAt: g.createdAt.toISOString(),
       avatars: g.members.map((m) => m.user.image || ""),
     })),
   });

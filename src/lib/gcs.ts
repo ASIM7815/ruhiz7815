@@ -2,9 +2,22 @@ import { Storage } from "@google-cloud/storage";
 import path from "path";
 
 const credentialsEnv = process.env.GCS_CREDENTIALS;
-const storage = credentialsEnv
-  ? new Storage({ credentials: JSON.parse(credentialsEnv) })
-  : new Storage({ keyFilename: path.join(process.cwd(), "googlebucket.json") });
+
+let storage: Storage;
+
+if (credentialsEnv) {
+  try {
+    const credentials = JSON.parse(credentialsEnv);
+    storage = new Storage({ credentials });
+  } catch (error) {
+    console.error("[GCS] Failed to parse GCS_CREDENTIALS:", error);
+    throw new Error("Invalid GCS_CREDENTIALS format. Must be valid JSON.");
+  }
+} else {
+  // Fallback to keyfile for local development
+  const keyFilePath = path.join(process.cwd(), "googlebucket.json");
+  storage = new Storage({ keyFilename: keyFilePath });
+}
 
 const bucketName = process.env.GCS_BUCKET_NAME || "ruhiz";
 const bucket = storage.bucket(bucketName);
@@ -28,29 +41,35 @@ export async function uploadToGCS(
   folder: keyof typeof GCS_FOLDERS,
   userId?: string
 ): Promise<string> {
-  // Create organized path: folder/userId/timestamp-filename
-  const timestamp = Date.now();
-  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const folderPath = GCS_FOLDERS[folder];
-  const filePath = userId 
-    ? `${folderPath}/${userId}/${timestamp}-${sanitizedFileName}`
-    : `${folderPath}/${timestamp}-${sanitizedFileName}`;
+  try {
+    // Create organized path: folder/userId/timestamp-filename
+    const timestamp = Date.now();
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const folderPath = GCS_FOLDERS[folder];
+    const filePath = userId 
+      ? `${folderPath}/${userId}/${timestamp}-${sanitizedFileName}`
+      : `${folderPath}/${timestamp}-${sanitizedFileName}`;
 
-  const file = bucket.file(filePath);
+    const file = bucket.file(filePath);
 
-  await file.save(buffer, {
-    contentType,
-    resumable: false,
-    metadata: {
-      cacheControl: "public, max-age=31536000",
-    },
-  });
+    await file.save(buffer, {
+      contentType,
+      resumable: false,
+      metadata: {
+        cacheControl: "public, max-age=31536000",
+      },
+    });
 
-  // Note: Bucket has uniform bucket-level access enabled
-  // Files are publicly accessible via bucket-level IAM policy
-  // No need to call makePublic() on individual files
+    // Note: Bucket has uniform bucket-level access enabled
+    // Files are publicly accessible via bucket-level IAM policy
+    // No need to call makePublic() on individual files
 
-  return `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    return `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+  } catch (error) {
+    console.error("[GCS] Upload failed:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to upload to GCS: ${message}`);
+  }
 }
 
 /**

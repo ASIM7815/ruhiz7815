@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       timeline: p.timeline,
       maxMembers: p.maxMembers,
       memberCount: p._count.members,
-      createdAt: p.createdAt,
+      createdAt: p.createdAt.toISOString(),
       skills: p.skills.map((s) => s.skill),
       owner: p.owner,
     })),

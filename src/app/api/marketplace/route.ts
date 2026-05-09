@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       condition: l.condition,
       imageUrl: l.imageUrl,
       sold: l.sold,
-      createdAt: l.createdAt,
+      createdAt: l.createdAt.toISOString(),
       seller: l.seller,
     })),
     nextCursor: hasMore ? items[items.length - 1].id : null,

@@ -1,5 +1,9 @@
+
 import { auth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // PATCH /api/messages/[id]/read — mark all unread messages in conversation as read
 export async function PATCH(

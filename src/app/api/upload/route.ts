@@ -1,6 +1,10 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { uploadToGCS } from "@/lib/gcs";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const LIMITS: Record<string, number> = {
   avatar: 2 * 1024 * 1024,

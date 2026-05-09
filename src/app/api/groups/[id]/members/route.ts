@@ -1,7 +1,11 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { db } from "@/lib/db";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/groups/[id]/members — list members (admin sees all, members see count only)
 export async function GET(

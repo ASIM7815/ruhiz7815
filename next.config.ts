@@ -20,8 +20,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Ensure Prisma client is bundled correctly (updated API)
-  serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg"],
+  // Ensure Prisma client and PostgreSQL adapter are bundled correctly
+  serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
+  
+  // Optimize for production
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "2mb",
+    },
+  },
 };
 
 export default nextConfig;

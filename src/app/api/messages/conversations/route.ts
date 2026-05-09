@@ -1,7 +1,11 @@
+
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/messages/conversations — list all conversations for the current user
 export async function GET() {

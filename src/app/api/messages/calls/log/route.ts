@@ -8,6 +8,9 @@ import {
   type CallLogStatus,
 } from "../utils";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const callLogStatuses = new Set<CallLogStatus>([
   "cancelled",
   "ended",

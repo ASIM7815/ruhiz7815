@@ -1,6 +1,10 @@
+
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const MAX_MESSAGE_LENGTH = 5000;
 

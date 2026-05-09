@@ -1,6 +1,10 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // POST /api/projects/[projectId]/join — submit join request
 export async function POST(

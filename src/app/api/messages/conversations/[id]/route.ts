@@ -1,7 +1,11 @@
+
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/messages/conversations/[id] — get paginated messages for a conversation
 export async function GET(

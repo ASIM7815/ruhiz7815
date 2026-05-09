@@ -1,6 +1,10 @@
+
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase-server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/groups — list user's group conversations
 export async function GET() {

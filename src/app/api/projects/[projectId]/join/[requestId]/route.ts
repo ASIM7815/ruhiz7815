@@ -1,7 +1,11 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // PATCH /api/projects/[projectId]/join/[requestId] — accept or reject
 export async function PATCH(

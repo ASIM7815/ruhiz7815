@@ -20,31 +20,75 @@ export default function RegisterPage() {
   const supabase = createClient();
 
   const handleGoogleSignup = async () => {
-    setGoogleLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      setGoogleLoading(true);
+      
+      console.log("[Google Signup] Initiating Google OAuth flow...");
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: false,
+        },
+      });
 
-    if (error) {
-      console.error("Error signing up with Google:", error);
+      if (error) {
+        console.error("[Google Signup] Error:", error.message, error);
+        alert(`Google signup failed: ${error.message}. Please try again.`);
+        setGoogleLoading(false);
+        return;
+      }
+
+      if (!data?.url) {
+        console.error("[Google Signup] No redirect URL received from Supabase");
+        alert("Google authentication failed. Please check your Supabase configuration.");
+        setGoogleLoading(false);
+        return;
+      }
+
+      console.log("[Google Signup] Redirecting to:", data.url);
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("[Google Signup] Unexpected error:", err);
+      alert("An unexpected error occurred. Please try again.");
       setGoogleLoading(false);
     }
   };
 
   const handleGitHubSignup = async () => {
-    setGithubLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      setGithubLoading(true);
+      
+      console.log("[GitHub Signup] Initiating GitHub OAuth flow...");
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "github",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: false,
+        },
+      });
 
-    if (error) {
-      console.error("Error signing up with GitHub:", error);
+      if (error) {
+        console.error("[GitHub Signup] Error:", error.message, error);
+        alert(`GitHub signup failed: ${error.message}. Please try again.`);
+        setGithubLoading(false);
+        return;
+      }
+
+      if (!data?.url) {
+        console.error("[GitHub Signup] No redirect URL received from Supabase");
+        alert("GitHub authentication failed. Please check your Supabase configuration.");
+        setGithubLoading(false);
+        return;
+      }
+
+      console.log("[GitHub Signup] Redirecting to:", data.url);
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("[GitHub Signup] Unexpected error:", err);
+      alert("An unexpected error occurred. Please try again.");
       setGithubLoading(false);
     }
   };

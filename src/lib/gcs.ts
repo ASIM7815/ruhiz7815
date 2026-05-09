@@ -7,16 +7,42 @@ let storage: Storage;
 
 if (credentialsEnv) {
   try {
-    const credentials = JSON.parse(credentialsEnv);
-    storage = new Storage({ credentials });
+    // Parse the credentials JSON
+    let credentials = JSON.parse(credentialsEnv);
+    
+    // Handle the private_key format - it might have literal \n or actual newlines
+    if (credentials.private_key && typeof credentials.private_key === 'string') {
+      // If the private key contains literal \n strings (not actual newlines), replace them
+      if (credentials.private_key.includes('\\n')) {
+        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+      }
+    }
+    
+    console.log("[GCS] Initializing with credentials for project:", credentials.project_id);
+    storage = new Storage({ 
+      credentials,
+      projectId: credentials.project_id 
+    });
+    console.log("[GCS] Storage initialized successfully");
   } catch (error) {
-    console.error("[GCS] Failed to parse GCS_CREDENTIALS:", error);
-    throw new Error("Invalid GCS_CREDENTIALS format. Must be valid JSON.");
+    console.error("[GCS] Failed to initialize GCS:", error);
+    if (credentialsEnv) {
+      console.error("[GCS] Credentials string length:", credentialsEnv.length);
+      console.error("[GCS] First 100 chars:", credentialsEnv.substring(0, 100));
+    }
+    throw new Error(`Failed to initialize GCS: ${error instanceof Error ? error.message : String(error)}`);
   }
 } else {
   // Fallback to keyfile for local development
-  const keyFilePath = path.join(process.cwd(), "googlebucket.json");
-  storage = new Storage({ keyFilename: keyFilePath });
+  console.log("[GCS] No GCS_CREDENTIALS env var, using keyfile");
+  try {
+    const keyFilePath = path.join(process.cwd(), "googlebucket.json");
+    storage = new Storage({ keyFilename: keyFilePath });
+    console.log("[GCS] Storage initialized with keyfile");
+  } catch (error) {
+    console.error("[GCS] Failed to initialize with keyfile:", error);
+    throw new Error("GCS initialization failed. Set GCS_CREDENTIALS environment variable or provide googlebucket.json");
+  }
 }
 
 const bucketName = process.env.GCS_BUCKET_NAME || "ruhiz";

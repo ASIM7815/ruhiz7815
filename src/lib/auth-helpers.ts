@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 export async function getCurrentUser() {
   const supabaseUser = await getUser();
   
+  console.log("[auth-helpers] Supabase user:", supabaseUser?.id || "null");
+  
   if (!supabaseUser) {
     return null;
   }
@@ -12,6 +14,8 @@ export async function getCurrentUser() {
   const dbUser = await db.user.findUnique({
     where: { id: supabaseUser.id },
   });
+
+  console.log("[auth-helpers] DB user:", dbUser?.id || "null");
 
   return dbUser;
 }

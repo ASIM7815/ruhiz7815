@@ -53,29 +53,29 @@ export default function DashboardPage() {
   }, []);
 
   const stats = [
-    { title: "Active Projects", value: data?.stats.projects || 0, icon: FolderKanban, color: "text-violet-400", bg: "bg-violet-500/10", change: "+2 this week" },
-    { title: "Messages Sent", value: data?.stats.messagesSent || 0, icon: MessageSquare, color: "text-pink-400", bg: "bg-pink-500/10", change: "7 day total" },
-    { title: "Resources Shared", value: data?.stats.resources || 0, icon: BookOpen, color: "text-emerald-400", bg: "bg-emerald-500/10", change: "Knowledge shared" },
-    { title: "Study Groups", value: data?.stats.studyGroups || 0, icon: Users, color: "text-amber-400", bg: "bg-amber-500/10", change: "Groups joined" },
+    { title: "Active Projects", value: data?.stats?.projects || 0, icon: FolderKanban, color: "text-violet-400", bg: "bg-violet-500/10", change: "+2 this week" },
+    { title: "Messages Sent", value: data?.stats?.messagesSent || 0, icon: MessageSquare, color: "text-pink-400", bg: "bg-pink-500/10", change: "7 day total" },
+    { title: "Resources Shared", value: data?.stats?.resources || 0, icon: BookOpen, color: "text-emerald-400", bg: "bg-emerald-500/10", change: "Knowledge shared" },
+    { title: "Study Groups", value: data?.stats?.studyGroups || 0, icon: Users, color: "text-amber-400", bg: "bg-amber-500/10", change: "Groups joined" },
   ];
 
   const weeklyActivityOption = {
     tooltip: { trigger: "axis", backgroundColor: "rgba(20,20,30,0.9)", borderColor: "rgba(255,255,255,0.1)", textStyle: { color: "#fff", fontSize: 12 } },
     grid: { top: 30, right: 20, bottom: 30, left: 40 },
-    xAxis: { type: "category" as const, data: data?.weeklyActivity.map((d) => d.day) || [], axisLine: { lineStyle: { color: "rgba(255,255,255,0.1)" } }, axisLabel: { color: "rgba(255,255,255,0.5)", fontSize: 11 } },
+    xAxis: { type: "category" as const, data: data?.weeklyActivity?.map((d) => d.day) || [], axisLine: { lineStyle: { color: "rgba(255,255,255,0.1)" } }, axisLabel: { color: "rgba(255,255,255,0.5)", fontSize: 11 } },
     yAxis: { type: "value" as const, splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } }, axisLabel: { color: "rgba(255,255,255,0.5)", fontSize: 11 } },
     series: [
       {
         name: "Sent",
         type: "bar",
-        data: data?.weeklyActivity.map((d) => d.sent) || [],
+        data: data?.weeklyActivity?.map((d) => d.sent) || [],
         itemStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(139,92,246,0.9)" }, { offset: 1, color: "rgba(139,92,246,0.3)" }] }, borderRadius: [4, 4, 0, 0] },
         barWidth: "35%",
       },
       {
         name: "Received",
         type: "bar",
-        data: data?.weeklyActivity.map((d) => d.received) || [],
+        data: data?.weeklyActivity?.map((d) => d.received) || [],
         itemStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(236,72,153,0.9)" }, { offset: 1, color: "rgba(236,72,153,0.3)" }] }, borderRadius: [4, 4, 0, 0] },
         barWidth: "35%",
       },

@@ -6,6 +6,8 @@ import {
   Bell,
   Copy,
   Check,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ImageCropDialog } from "@/components/image-crop-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface UserProfile {
   id: string;
@@ -43,10 +47,14 @@ interface UserProfile {
 }
 
 export default function SettingsPage() {
+  const { toast } = useToast();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     bio: "",
@@ -72,26 +80,97 @@ export default function SettingsPage() {
 
   async function handleSave() {
     setSaving(true);
-    await fetch("/api/user/me", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setSaving(false);
+    try {
+      const res = await fetch("/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      
+      if (res.ok) {
+        toast({
+          title: "Success!",
+          description: "Your profile has been updated.",
+        });
+      } else {
+        throw new Error("Failed to save");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch("/api/user/me/avatar", {
-      method: "PATCH",
-      body: formData,
-    });
-    if (res.ok) {
-      const { image } = await res.json();
-      setProfile((p) => (p ? { ...p, image } : p));
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Image must be less than 2MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Read file and open crop dialog
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setSelectedImage(e.target?.result as string);
+      setCropDialogOpen(true);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleCropComplete(croppedBlob: Blob) {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", croppedBlob, "avatar.jpg");
+      
+      const res = await fetch("/api/user/me/avatar", {
+        method: "PATCH",
+        body: formData,
+      });
+      
+      if (res.ok) {
+        const { image } = await res.json();
+        setProfile((p) => (p ? { ...p, image } : p));
+        toast({
+          title: "Success!",
+          description: "Profile photo updated successfully.",
+        });
+      } else {
+        throw new Error("Upload failed");
+      }
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   }
 
@@ -162,9 +241,9 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center gap-4">
-                <Avatar className="h-20 w-20">
+                <Avatar className="h-20 w-20 border-2 border-primary/20">
                   <AvatarImage src={profile?.image || undefined} />
-                  <AvatarFallback>
+                  <AvatarFallback className="text-2xl">
                     {profile?.name?.charAt(0)?.toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
@@ -174,20 +253,45 @@ export default function SettingsPage() {
                     type="file"
                     accept="image/jpeg,image/png,image/gif,image/webp"
                     className="hidden"
-                    onChange={handleAvatarChange}
+                    onChange={handleFileSelect}
                   />
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
                   >
-                    Change Photo
+                    {uploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Change Photo
+                      </>
+                    )}
                   </Button>
                   <p className="text-xs text-muted-foreground mt-1">
                     JPG, PNG or GIF. Max 2MB.
                   </p>
                 </div>
               </div>
+
+              {/* Image Crop Dialog */}
+              {selectedImage && (
+                <ImageCropDialog
+                  open={cropDialogOpen}
+                  onClose={() => {
+                    setCropDialogOpen(false);
+                    setSelectedImage(null);
+                  }}
+                  imageSrc={selectedImage}
+                  onCropComplete={handleCropComplete}
+                  aspectRatio={1}
+                />
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">

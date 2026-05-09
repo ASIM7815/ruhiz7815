@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { Toaster } from "@/components/ui/toast";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -38,7 +39,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}>
-      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans"><Providers>{children}</Providers></body>
+      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
+        <Providers>{children}</Providers>
+        <Toaster />
+      </body>
     </html>
   );
 }

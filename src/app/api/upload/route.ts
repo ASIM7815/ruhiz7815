@@ -1,19 +1,27 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
-import { uploadToGCS } from "@/lib/gcs";
+import { uploadToGCS, GCS_FOLDERS } from "@/lib/gcs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// File size limits by type
 const LIMITS: Record<string, number> = {
-  avatar: 2 * 1024 * 1024,
-  project: 10 * 1024 * 1024,
-  note: 10 * 1024 * 1024,
+  avatar: 2 * 1024 * 1024,        // 2MB for avatars
+  project: 10 * 1024 * 1024,      // 10MB for project files
+  knowledge: 10 * 1024 * 1024,    // 10MB for knowledge hub
+  marketplace: 5 * 1024 * 1024,   // 5MB for marketplace images
+  groupChat: 10 * 1024 * 1024,    // 10MB for group chat files
 };
 
+// Allowed file types by category
 const ALLOWED_TYPES: Record<string, string[]> = {
   avatar: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+  marketplace: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+  groupChat: [
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "application/pdf",
+  ],
   project: [
     "image/jpeg", "image/png", "image/gif", "image/webp",
     "application/pdf", "application/zip",
@@ -21,14 +29,16 @@ const ALLOWED_TYPES: Record<string, string[]> = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
   ],
-  note: [
+  knowledge: [
     "image/jpeg", "image/png", "image/gif", "image/webp",
     "application/pdf", "application/zip",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
   ],
 };
 
@@ -40,33 +50,61 @@ export async function POST(req: NextRequest) {
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
-  const type = formData.get("type") as string | null;
-  const entityId = formData.get("entityId") as string | null;
+  const type = formData.get("type") as string | null; // avatar, project, knowledge, marketplace, groupChat
+  const entityId = formData.get("entityId") as string | null; // optional: projectId, groupId, etc.
 
   if (!file || !type || !LIMITS[type]) {
     return NextResponse.json({ error: "Missing file or invalid type" }, { status: 400 });
   }
 
   if (!ALLOWED_TYPES[type].includes(file.type)) {
-    return NextResponse.json({ error: "File type not allowed" }, { status: 400 });
+    return NextResponse.json({ error: `File type ${file.type} not allowed for ${type}` }, { status: 400 });
   }
 
   if (file.size > LIMITS[type]) {
-    return NextResponse.json({ error: "File too large" }, { status: 400 });
+    const limitMB = (LIMITS[type] / (1024 * 1024)).toFixed(0);
+    return NextResponse.json({ error: `File too large. Maximum ${limitMB}MB allowed` }, { status: 400 });
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const ext = file.name.split(".").pop() || "bin";
 
-  let gcsPath: string;
-  if (type === "avatar") {
-    gcsPath = `avatars/${user.id}.${ext}`;
-  } else if (type === "project") {
-    gcsPath = `projects/${entityId || user.id}/${Date.now()}-${file.name}`;
-  } else {
-    gcsPath = `notes/${entityId || user.id}/${Date.now()}-${file.name}`;
+  // Map upload type to GCS folder
+  let folder: keyof typeof GCS_FOLDERS;
+  switch (type) {
+    case "avatar":
+      folder = "PROFILES";
+      break;
+    case "project":
+      folder = "PROJECTS";
+      break;
+    case "knowledge":
+      folder = "KNOWLEDGE_HUB";
+      break;
+    case "marketplace":
+      folder = "MARKETPLACE";
+      break;
+    case "groupChat":
+      folder = "GROUP_CHAT";
+      break;
+    default:
+      return NextResponse.json({ error: "Invalid upload type" }, { status: 400 });
   }
 
-  const url = await uploadToGCS(buffer, gcsPath, file.type);
-  return NextResponse.json({ url });
+  try {
+    // Upload to GCS with organized folder structure
+    const url = await uploadToGCS(buffer, file.name, file.type, folder, user.id);
+    
+    console.log(`[Upload] ${type} file uploaded:`, {
+      userId: user.id,
+      fileName: file.name,
+      size: file.size,
+      folder,
+      url,
+    });
+
+    return NextResponse.json({ url, fileName: file.name, size: file.size });
+  } catch (uploadError) {
+    console.error("[Upload] Error uploading file:", uploadError);
+    return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
+  }
 }

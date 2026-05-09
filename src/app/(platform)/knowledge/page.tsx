@@ -117,7 +117,7 @@ export default function KnowledgeHubPage() {
     let fileUrl: string | null = null;
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("type", "note");
+    formData.append("type", "knowledge");
     const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
     if (!uploadRes.ok) {
       const err = await uploadRes.json().catch(() => ({}));

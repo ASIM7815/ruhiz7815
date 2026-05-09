@@ -151,9 +151,9 @@ export default function ProfilePage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {[
-          { label: "Projects", value: user.stats.projects, icon: FolderKanban },
-          { label: "Resources", value: user.stats.resources, icon: BookOpen },
-          { label: "Study Groups", value: user.stats.studyGroups, icon: Users },
+          { label: "Projects", value: user.stats?.projects || 0, icon: FolderKanban },
+          { label: "Resources", value: user.stats?.resources || 0, icon: BookOpen },
+          { label: "Study Groups", value: user.stats?.studyGroups || 0, icon: Users },
         ].map((stat) => (
           <Card key={stat.label}>
             <CardContent className="p-4 text-center">

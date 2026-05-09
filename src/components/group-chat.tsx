@@ -183,11 +183,15 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("type", "project");
+    formData.append("type", "groupChat");
+    formData.append("entityId", groupId);
 
     try {
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!uploadRes.ok) return;
+      if (!uploadRes.ok) {
+        console.error("Upload failed");
+        return;
+      }
       const { url } = await uploadRes.json();
 
       const messageType = file.type.startsWith("image/") ? "IMAGE" : "PDF";

@@ -4,34 +4,63 @@ import path from "path";
 const credentialsEnv = process.env.GCS_CREDENTIALS;
 const storage = credentialsEnv
   ? new Storage({ credentials: JSON.parse(credentialsEnv) })
-  : new Storage({ keyFilename: path.join(process.cwd(), "ruhiz-490414-9c8203239501.json") });
+  : new Storage({ keyFilename: path.join(process.cwd(), "googlebucket.json") });
 
 const bucketName = process.env.GCS_BUCKET_NAME || "ruhiz";
 const bucket = storage.bucket(bucketName);
 
+// Folder structure for organized storage
+export const GCS_FOLDERS = {
+  KNOWLEDGE_HUB: "knowledge-hub",
+  GROUP_CHAT: "group-chat",
+  MARKETPLACE: "marketplace",
+  PROFILES: "profiles",
+  PROJECTS: "projects",
+} as const;
+
+/**
+ * Upload file to GCS with organized folder structure
+ */
 export async function uploadToGCS(
   buffer: Buffer,
-  filePath: string,
-  contentType: string
+  fileName: string,
+  contentType: string,
+  folder: keyof typeof GCS_FOLDERS,
+  userId?: string
 ): Promise<string> {
+  // Create organized path: folder/userId/timestamp-filename
+  const timestamp = Date.now();
+  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const folderPath = GCS_FOLDERS[folder];
+  const filePath = userId 
+    ? `${folderPath}/${userId}/${timestamp}-${sanitizedFileName}`
+    : `${folderPath}/${timestamp}-${sanitizedFileName}`;
+
   const file = bucket.file(filePath);
+
   await file.save(buffer, {
     contentType,
     resumable: false,
-    metadata: { cacheControl: "public, max-age=31536000" },
+    metadata: {
+      cacheControl: "public, max-age=31536000",
+    },
   });
 
-  // Public read access is granted via bucket-level IAM policy (allUsers:objectViewer)
-  // No need for file.makePublic() with Uniform Bucket-Level Access enabled
+  // Make file publicly accessible
+  await file.makePublic();
 
   return `https://storage.googleapis.com/${bucket.name}/${filePath}`;
 }
 
+/**
+ * Delete file from GCS
+ */
 export async function deleteFromGCS(filePath: string): Promise<void> {
   try {
     await bucket.file(filePath).delete();
-  } catch {
-    // Ignore if file doesn't exist
+  } catch (error) {
+    console.error("Error deleting file from GCS:", error);
+    // Don't throw - file might already be deleted
   }
 }
 
@@ -45,4 +74,34 @@ export function extractGCSPath(url: string): string | null {
     return url.slice(prefix.length);
   }
   return null;
+}
+
+/**
+ * Get signed URL for temporary access (optional, for private files)
+ */
+export async function getSignedUrl(filePath: string, expiresInMinutes: number = 60): Promise<string> {
+  const file = bucket.file(filePath);
+  const [url] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + expiresInMinutes * 60 * 1000,
+  });
+  return url;
+}
+
+/**
+ * List files in a specific folder
+ */
+export async function listFiles(folder: keyof typeof GCS_FOLDERS, userId?: string) {
+  const prefix = userId 
+    ? `${GCS_FOLDERS[folder]}/${userId}/`
+    : `${GCS_FOLDERS[folder]}/`;
+  
+  const [files] = await bucket.getFiles({ prefix });
+  return files.map(file => ({
+    name: file.name,
+    url: `https://storage.googleapis.com/${bucket.name}/${file.name}`,
+    size: file.metadata.size,
+    contentType: file.metadata.contentType,
+    created: file.metadata.timeCreated,
+  }));
 }

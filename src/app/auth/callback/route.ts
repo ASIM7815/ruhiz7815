@@ -63,13 +63,13 @@ export async function GET(request: Request) {
     console.log("[auth/callback] User metadata:", JSON.stringify(supabaseUser.user_metadata, null, 2));
     
     try {
-      // Check if user exists in our database
+      // Check if user exists in our database by email (not by ID)
       let dbUser = await db.user.findUnique({
         where: { email: supabaseUser.email! },
       });
 
       if (!dbUser) {
-        // Create new user with unique UID
+        // Create new user with Supabase ID and unique UID
         const uid = String(Math.floor(10000 + Math.random() * 90000));
         
         // Extract name based on provider
@@ -92,7 +92,7 @@ export async function GET(request: Request) {
         
         dbUser = await db.user.create({
           data: {
-            id: supabaseUser.id,
+            id: supabaseUser.id, // Use Supabase UUID as primary key
             email: supabaseUser.email!,
             name: userName,
             image: avatarUrl,
@@ -105,6 +105,39 @@ export async function GET(request: Request) {
         console.log("[auth/callback] ✅ User created successfully:", dbUser.id);
       } else {
         console.log("[auth/callback] ✅ User already exists:", dbUser.id);
+        
+        // IMPORTANT: If user ID doesn't match Supabase ID, we need to migrate
+        if (dbUser.id !== supabaseUser.id) {
+          console.log("[auth/callback] ⚠️ User ID mismatch - old:", dbUser.id, "new:", supabaseUser.id);
+          console.log("[auth/callback] Migrating user to new Supabase ID...");
+          
+          // Store old user data
+          const oldUserData = { ...dbUser };
+          
+          // Delete old user record
+          await db.user.delete({
+            where: { id: dbUser.id },
+          });
+          
+          // Create new user with Supabase ID
+          dbUser = await db.user.create({
+            data: {
+              id: supabaseUser.id,
+              uid: oldUserData.uid,
+              email: oldUserData.email,
+              name: oldUserData.name,
+              image: oldUserData.image,
+              bio: oldUserData.bio,
+              university: oldUserData.university,
+              role: oldUserData.role,
+              reputation: oldUserData.reputation,
+              emailVerified: oldUserData.emailVerified,
+              onboardingComplete: oldUserData.onboardingComplete,
+            },
+          });
+          
+          console.log("[auth/callback] ✅ User migrated successfully to new ID:", dbUser.id);
+        }
         
         // Update user info if needed
         const updates: any = {};

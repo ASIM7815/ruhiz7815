@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { ZoomIn, RotateCw } from "lucide-react";
 
 interface ImageCropDialogProps {
@@ -22,55 +21,53 @@ export function ImageCropDialog({
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   const handleCrop = useCallback(async () => {
-    if (!canvasRef.current || !imageRef.current) return;
-
     const canvas = canvasRef.current;
-    const image = imageRef.current;
+    if (!canvas) return;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Set canvas size for profile picture (400x400)
-    const size = 400;
-    canvas.width = size;
-    canvas.height = size;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    
+    img.onload = () => {
+      const size = 400;
+      canvas.width = size;
+      canvas.height = size;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, size, size);
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.translate(size / 2, size / 2);
+      ctx.rotate((rotation * Math.PI) / 180);
 
-    // Save context state
-    ctx.save();
+      const scaledSize = size * zoom;
+      ctx.drawImage(img, -scaledSize / 2, -scaledSize / 2, scaledSize, scaledSize);
+      ctx.restore();
 
-    // Move to center
-    ctx.translate(size / 2, size / 2);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          onCropComplete(blob);
+        }
+      }, "image/jpeg", 0.92);
+    };
 
-    // Apply rotation
-    ctx.rotate((rotation * Math.PI) / 180);
+    img.src = imageSrc;
+  }, [zoom, rotation, imageSrc, onCropComplete]);
 
-    // Calculate scaled dimensions
-    const scaledSize = size * zoom;
+  if (!mounted) {
+    return null;
+  }
 
-    // Draw image centered
-    ctx.drawImage(
-      image,
-      -scaledSize / 2,
-      -scaledSize / 2,
-      scaledSize,
-      scaledSize
-    );
-
-    // Restore context
-    ctx.restore();
-
-    // Convert to blob
-    canvas.toBlob((blob) => {
-      if (blob) {
-        onCropComplete(blob);
-      }
-    }, "image/jpeg", 0.92);
-  }, [zoom, rotation, onCropComplete]);
+  const transformStyle = `scale(${zoom}) rotate(${rotation}deg)`;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -80,35 +77,30 @@ export function ImageCropDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Preview Area */}
           <div className="relative bg-muted rounded-lg overflow-hidden aspect-square">
             <div className="absolute inset-0 flex items-center justify-center p-4">
-              <img
-                ref={imageRef}
-                src={imageSrc}
-                alt="Crop preview"
-                className="max-w-full max-h-full object-contain"
-                style={{
-                  transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                  transition: "transform 0.2s ease-out",
-                }}
-                crossOrigin="anonymous"
-              />
+              {imageSrc && (
+                <div
+                  className="max-w-full max-h-full transition-transform duration-200 ease-out"
+                  style={{ transform: transformStyle }}
+                >
+                  <img
+                    src={imageSrc}
+                    alt="Crop preview"
+                    onLoad={() => setImageLoaded(true)}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              )}
             </div>
-            {/* Crop overlay circle */}
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute inset-0 bg-black/40" />
-              <div 
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg"
-                style={{ width: "80%", paddingBottom: "80%" }}
-              />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg w-4/5 aspect-square" />
             </div>
           </div>
 
-          {/* Hidden canvas for cropping */}
           <canvas ref={canvasRef} className="hidden" />
 
-          {/* Controls */}
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -118,13 +110,14 @@ export function ImageCropDialog({
                 </label>
                 <span className="text-sm text-muted-foreground">{Math.round(zoom * 100)}%</span>
               </div>
-              <Slider
-                value={[zoom]}
-                onValueChange={([value]) => setZoom(value)}
-                min={0.5}
-                max={3}
-                step={0.1}
-                className="w-full"
+              <input
+                type="range"
+                min="0.5"
+                max="3"
+                step="0.1"
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                className="w-full h-1 bg-muted rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
               />
             </div>
 
@@ -136,13 +129,14 @@ export function ImageCropDialog({
                 </label>
                 <span className="text-sm text-muted-foreground">{rotation}°</span>
               </div>
-              <Slider
-                value={[rotation]}
-                onValueChange={([value]) => setRotation(value)}
-                min={0}
-                max={360}
-                step={15}
-                className="w-full"
+              <input
+                type="range"
+                min="0"
+                max="360"
+                step="15"
+                value={rotation}
+                onChange={(e) => setRotation(parseInt(e.target.value))}
+                className="w-full h-1 bg-muted rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
               />
             </div>
           </div>
@@ -152,7 +146,7 @@ export function ImageCropDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleCrop}>
+          <Button onClick={handleCrop} disabled={!imageLoaded}>
             Apply & Upload
           </Button>
         </DialogFooter>

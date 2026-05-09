@@ -289,7 +289,6 @@ export default function SettingsPage() {
                   }}
                   imageSrc={selectedImage}
                   onCropComplete={handleCropComplete}
-                  aspectRatio={1}
                 />
               )}
 

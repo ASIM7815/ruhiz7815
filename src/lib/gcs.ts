@@ -46,8 +46,9 @@ export async function uploadToGCS(
     },
   });
 
-  // Make file publicly accessible
-  await file.makePublic();
+  // Note: Bucket has uniform bucket-level access enabled
+  // Files are publicly accessible via bucket-level IAM policy
+  // No need to call makePublic() on individual files
 
   return `https://storage.googleapis.com/${bucket.name}/${filePath}`;
 }

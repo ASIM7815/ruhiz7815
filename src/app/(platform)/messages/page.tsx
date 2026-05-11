@@ -36,8 +36,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { GroupChat } from "@/components/group-chat";
-import { CallInterface } from "@/components/messaging/call-interface";
-import { useWebRTCCall, type CallMessage } from "@/hooks/use-webrtc-call";
+import { useCall } from "@/components/messaging/call-provider";
+import type { CallMessage } from "@/hooks/use-webrtc-call";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -145,6 +145,8 @@ function MessagesPageContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const convPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const call = useCall();
+  const subscribeToCallMessages = call.subscribeToCallMessages;
 
   // ── Fetch conversations ────────────────────────────────────────
 
@@ -173,16 +175,9 @@ function MessagesPageContent() {
     [fetchConversations, selectedConversation]
   );
 
-  const call = useWebRTCCall({
-    currentUser: userId
-      ? {
-          id: userId,
-          image: user?.user_metadata?.avatar_url ?? null,
-          name: user?.user_metadata?.full_name ?? "Unknown",
-        }
-      : null,
-    onCallMessage: handleCallMessage,
-  });
+  useEffect(() => {
+    return subscribeToCallMessages(handleCallMessage);
+  }, [handleCallMessage, subscribeToCallMessages]);
 
   const fetchGroupConversations = useCallback(async () => {
     setGroupsLoading(true);
@@ -562,20 +557,6 @@ function MessagesPageContent() {
 
   return (
     <TooltipProvider>
-      <CallInterface
-        activeCall={call.activeCall}
-        cameraEnabled={call.cameraEnabled}
-        localStream={call.localStream}
-        micEnabled={call.micEnabled}
-        onAccept={call.acceptCall}
-        onEnd={call.endCall}
-        onReject={call.rejectCall}
-        onToggleCamera={call.toggleCamera}
-        onToggleMic={call.toggleMic}
-        onToggleScreenShare={call.toggleScreenShare}
-        remoteStream={call.remoteStream}
-        screenSharing={call.screenSharing}
-      />
       <div className="flex h-[calc(100dvh-4rem)] overflow-hidden -m-3 sm:-m-4 lg:-m-6">
         {/* ── Left Panel: Conversations ── */}
         <div

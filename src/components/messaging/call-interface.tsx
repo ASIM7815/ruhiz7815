@@ -9,27 +9,39 @@ import {
   Phone,
   PhoneCall,
   PhoneOff,
+  Settings,
   Video,
   VideoOff,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ActiveCall } from "@/hooks/use-webrtc-call";
 
 type CallInterfaceProps = {
   activeCall: ActiveCall | null;
+  audioInputDevices: MediaDeviceInfo[];
+  audioOutputDevices: MediaDeviceInfo[];
   cameraEnabled: boolean;
   localStream: MediaStream | null;
+  mediaError: string | null;
   micEnabled: boolean;
   onAccept: () => void;
   onEnd: () => void;
   onReject: () => void;
+  onSelectAudioInput: (deviceId: string) => void;
+  onSelectAudioOutput: (deviceId: string) => void;
+  onSelectVideoInput: (deviceId: string) => void;
   onToggleCamera: () => void;
   onToggleMic: () => void;
   onToggleScreenShare: () => void;
   remoteStream: MediaStream | null;
   screenSharing: boolean;
+  selectedAudioInputId: string | null;
+  selectedAudioOutputId: string | null;
+  selectedVideoInputId: string | null;
+  videoInputDevices: MediaDeviceInfo[];
 };
 
 function getInitials(name: string) {
@@ -51,21 +63,68 @@ function formatDuration(startedAt: number | null, now: number) {
     .padStart(2, "0")}`;
 }
 
+function DeviceSelect({
+  disabled = false,
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  disabled?: boolean;
+  label: string;
+  onChange: (deviceId: string) => void;
+  options: MediaDeviceInfo[];
+  value: string | null;
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <select
+        className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        disabled={disabled}
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.length === 0 ? (
+          <option value="">Unavailable</option>
+        ) : (
+          options.map((device, index) => (
+            <option key={device.deviceId || index} value={device.deviceId}>
+              {device.label || `${label} ${index + 1}`}
+            </option>
+          ))
+        )}
+      </select>
+    </label>
+  );
+}
+
 export function CallInterface({
   activeCall,
+  audioInputDevices,
+  audioOutputDevices,
   cameraEnabled,
   localStream,
+  mediaError,
   micEnabled,
   onAccept,
   onEnd,
   onReject,
+  onSelectAudioInput,
+  onSelectAudioOutput,
+  onSelectVideoInput,
   onToggleCamera,
   onToggleMic,
   onToggleScreenShare,
   remoteStream,
   screenSharing,
+  selectedAudioInputId,
+  selectedAudioOutputId,
+  selectedVideoInputId,
+  videoInputDevices,
 }: CallInterfaceProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [durationTick, setDurationTick] = useState(() => Date.now());
 
@@ -80,6 +139,22 @@ export function CallInterface({
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream]);
+
+  useEffect(() => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
+  useEffect(() => {
+    if (!remoteAudioRef.current || !selectedAudioOutputId) return;
+
+    const audioElement = remoteAudioRef.current as HTMLAudioElement & {
+      setSinkId?: (sinkId: string) => Promise<void>;
+    };
+
+    void audioElement.setSinkId?.(selectedAudioOutputId);
+  }, [selectedAudioOutputId]);
 
   useEffect(() => {
     if (!activeCall?.connectedAt) return;
@@ -153,6 +228,13 @@ export function CallInterface({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background text-foreground">
+      <audio
+        ref={remoteAudioRef}
+        autoPlay
+        playsInline
+        muted={showRemoteVideo}
+        className="hidden"
+      />
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9">
@@ -161,7 +243,9 @@ export function CallInterface({
           </Avatar>
           <div>
             <p className="text-sm font-medium">{activeCall.peer.name}</p>
-            <p className="text-xs text-muted-foreground">{statusText}</p>
+            <p className="text-xs text-muted-foreground">
+              {mediaError ?? statusText}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -254,6 +338,45 @@ export function CallInterface({
             <MonitorUp className="h-5 w-5" />
           )}
         </Button>
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-12 w-12 rounded-full"
+              />
+            }
+          >
+            <Settings className="h-5 w-5" />
+          </PopoverTrigger>
+          <PopoverContent side="top" className="w-72 gap-3">
+            <DeviceSelect
+              disabled={audioInputDevices.length === 0}
+              label="Microphone"
+              onChange={onSelectAudioInput}
+              options={audioInputDevices}
+              value={selectedAudioInputId}
+            />
+            {activeCall.kind === "video" && (
+              <DeviceSelect
+                disabled={videoInputDevices.length === 0}
+                label="Camera"
+                onChange={onSelectVideoInput}
+                options={videoInputDevices}
+                value={selectedVideoInputId}
+              />
+            )}
+            {audioOutputDevices.length > 0 && (
+              <DeviceSelect
+                label="Speaker"
+                onChange={onSelectAudioOutput}
+                options={audioOutputDevices}
+                value={selectedAudioOutputId}
+              />
+            )}
+          </PopoverContent>
+        </Popover>
         <Button
           size="icon"
           variant="destructive"

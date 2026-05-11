@@ -79,25 +79,82 @@ type VerifyCallResponse = {
 };
 
 const CALL_RING_TIMEOUT_MS = 30_000;
+const MAX_RECONNECT_ATTEMPTS = 2;
 const SIGNAL_SUBSCRIBE_TIMEOUT_MS = 6_000;
+
+function getMediaErrorMessage(error: unknown, kind: CallKind) {
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError") {
+      return kind === "video"
+        ? "Camera and microphone permission was denied."
+        : "Microphone permission was denied.";
+    }
+
+    if (error.name === "NotFoundError") {
+      return kind === "video"
+        ? "No camera or microphone was found."
+        : "No microphone was found.";
+    }
+
+    if (error.name === "NotReadableError") {
+      return "Your camera or microphone is already in use by another app.";
+    }
+  }
+
+  return kind === "video"
+    ? "Unable to access camera or microphone."
+    : "Unable to access microphone.";
+}
+
+function getAudioConstraints(deviceId: string | null): MediaTrackConstraints {
+  return {
+    autoGainControl: true,
+    deviceId: deviceId ? { exact: deviceId } : undefined,
+    echoCancellation: true,
+    noiseSuppression: true,
+  };
+}
+
+function getVideoConstraints(deviceId: string | null): MediaTrackConstraints {
+  return {
+    deviceId: deviceId ? { exact: deviceId } : undefined,
+    facingMode: deviceId ? undefined : "user",
+    frameRate: { ideal: 24, max: 30 },
+    height: { ideal: 720 },
+    width: { ideal: 1280 },
+  };
+}
 
 export function useWebRTCCall({
   currentUser,
   onCallMessage,
 }: UseWebRTCCallOptions) {
   const [activeCall, setActiveCallState] = useState<ActiveCall | null>(null);
+  const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [localStream, setLocalStreamState] = useState<MediaStream | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [micEnabled, setMicEnabled] = useState(false);
   const [remoteStream, setRemoteStreamState] = useState<MediaStream | null>(null);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [selectedAudioInputId, setSelectedAudioInputId] = useState<string | null>(null);
+  const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string | null>(null);
+  const [selectedVideoInputId, setSelectedVideoInputId] = useState<string | null>(null);
+  const [videoInputDevices, setVideoInputDevices] = useState<MediaDeviceInfo[]>([]);
 
   const activeCallRef = useRef<ActiveCall | null>(null);
   const callChannelRef = useRef<RealtimeChannel | null>(null);
+  const createAndSendOfferRef = useRef<
+    (options?: RTCOfferOptions) => Promise<void>
+  >(async () => {});
   const iceServersRef = useRef<RTCIceServer[]>([]);
   const localStreamRef = useRef<MediaStream | null>(null);
   const loggedCallIdsRef = useRef(new Set<string>());
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimeoutRef = useRef<number | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const ringTimeoutRef = useRef<number | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -134,6 +191,13 @@ export function useWebRTCCall({
     }
   }, []);
 
+  const clearReconnectTimeout = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  }, []);
+
   const removeCallChannel = useCallback(() => {
     if (callChannelRef.current) {
       supabase.removeChannel(callChannelRef.current);
@@ -142,6 +206,9 @@ export function useWebRTCCall({
   }, []);
 
   const closePeerConnection = useCallback(() => {
+    pendingIceCandidatesRef.current = [];
+    reconnectAttemptsRef.current = 0;
+    clearReconnectTimeout();
     peerConnectionRef.current?.getSenders().forEach((sender) => {
       if (sender.track && sender.track.readyState !== "ended") {
         sender.track.stop();
@@ -149,7 +216,7 @@ export function useWebRTCCall({
     });
     peerConnectionRef.current?.close();
     peerConnectionRef.current = null;
-  }, []);
+  }, [clearReconnectTimeout]);
 
   const stopMedia = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -166,6 +233,7 @@ export function useWebRTCCall({
   const cleanupCall = useCallback(
     (delay = 0) => {
       clearRingTimeout();
+      clearReconnectTimeout();
       const run = () => {
         closePeerConnection();
         removeCallChannel();
@@ -181,6 +249,7 @@ export function useWebRTCCall({
     },
     [
       clearRingTimeout,
+      clearReconnectTimeout,
       closePeerConnection,
       removeCallChannel,
       setActiveCall,
@@ -188,7 +257,19 @@ export function useWebRTCCall({
     ]
   );
 
-  const subscribeChannel = useCallback((channel: RealtimeChannel) => {
+  const syncRealtimeAuth = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session?.access_token) {
+      supabase.realtime.setAuth(session.access_token);
+    }
+  }, []);
+
+  const subscribeChannel = useCallback(async (channel: RealtimeChannel) => {
+    await syncRealtimeAuth();
+
     return new Promise<RealtimeChannel>((resolve, reject) => {
       const timeout = window.setTimeout(() => {
         reject(new Error("Realtime signaling channel timed out."));
@@ -206,7 +287,7 @@ export function useWebRTCCall({
         }
       });
     });
-  }, []);
+  }, [syncRealtimeAuth]);
 
   const sendToCallChannel = useCallback(
     async (signal: CallSignal) => {
@@ -225,7 +306,7 @@ export function useWebRTCCall({
       if (!currentUser?.id) return;
 
       const channel = supabase.channel(`call:${callId}`, {
-        config: { broadcast: { self: false } },
+        config: { broadcast: { ack: true, self: false }, private: true },
       });
 
       try {
@@ -247,7 +328,7 @@ export function useWebRTCCall({
       if (!currentUser?.id) return;
 
       const channel = supabase.channel(`calls:user:${userId}`, {
-        config: { broadcast: { self: false } },
+        config: { broadcast: { ack: true, self: false }, private: true },
       });
 
       try {
@@ -264,6 +345,63 @@ export function useWebRTCCall({
     [currentUser?.id, subscribeChannel]
   );
 
+  const refreshDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter((device) => device.kind === "audioinput");
+    const audioOutputs = devices.filter((device) => device.kind === "audiooutput");
+    const videoInputs = devices.filter((device) => device.kind === "videoinput");
+
+    setAudioInputDevices(audioInputs);
+    setAudioOutputDevices(audioOutputs);
+    setVideoInputDevices(videoInputs);
+
+    setSelectedAudioInputId((current) =>
+      current && audioInputs.some((device) => device.deviceId === current)
+        ? current
+        : audioInputs[0]?.deviceId ?? null
+    );
+    setSelectedAudioOutputId((current) =>
+      current && audioOutputs.some((device) => device.deviceId === current)
+        ? current
+        : audioOutputs[0]?.deviceId ?? null
+    );
+    setSelectedVideoInputId((current) =>
+      current && videoInputs.some((device) => device.deviceId === current)
+        ? current
+        : videoInputs[0]?.deviceId ?? null
+    );
+  }, []);
+
+  const updateCallSession = useCallback(
+    async (
+      callId: string,
+      status:
+        | "accepted"
+        | "busy"
+        | "cancelled"
+        | "ended"
+        | "failed"
+        | "missed"
+        | "rejected",
+      durationSeconds = 0,
+      failureReason?: string
+    ) => {
+      try {
+        const res = await fetch(`/api/messages/calls/${callId}`, {
+          body: JSON.stringify({ durationSeconds, failureReason, status }),
+          headers: { "Content-Type": "application/json" },
+          method: "PATCH",
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
+
   const logCall = useCallback(
     async (
       call: ActiveCall,
@@ -277,8 +415,16 @@ export function useWebRTCCall({
         : 0;
 
       try {
+        await updateCallSession(
+          call.callId,
+          status,
+          durationSeconds,
+          call.error ?? undefined
+        );
+
         const res = await fetch("/api/messages/calls/log", {
           body: JSON.stringify({
+            callId: call.callId,
             conversationId: call.conversationId,
             durationSeconds,
             kind: call.kind,
@@ -296,7 +442,7 @@ export function useWebRTCCall({
         // Call logging should never break the call cleanup path.
       }
     },
-    [onCallMessage]
+    [onCallMessage, updateCallSession]
   );
 
   const getLocalMedia = useCallback(async (kind: CallKind) => {
@@ -304,24 +450,58 @@ export function useWebRTCCall({
       throw new Error("This browser does not support audio or video calls.");
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video:
-        kind === "video"
-          ? {
-              facingMode: "user",
-              height: { ideal: 720 },
-              width: { ideal: 1280 },
-            }
-          : false,
-    });
+    try {
+      setMediaError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: getAudioConstraints(selectedAudioInputId),
+        video: kind === "video" ? getVideoConstraints(selectedVideoInputId) : false,
+      });
 
-    setLocalStream(stream);
-    setMicEnabled(stream.getAudioTracks().some((track) => track.enabled));
-    setCameraEnabled(stream.getVideoTracks().some((track) => track.enabled));
+      setLocalStream(stream);
+      setMicEnabled(stream.getAudioTracks().some((track) => track.enabled));
+      setCameraEnabled(stream.getVideoTracks().some((track) => track.enabled));
 
-    return stream;
-  }, [setLocalStream]);
+      stream.getTracks().forEach((track) => {
+        track.onended = () => {
+          if (track.kind === "audio") setMicEnabled(false);
+          if (track.kind === "video") setCameraEnabled(false);
+        };
+      });
+
+      void refreshDevices();
+      return stream;
+    } catch (error) {
+      const message =
+        error instanceof Error &&
+        error.message === "This browser does not support audio or video calls."
+          ? error.message
+          : getMediaErrorMessage(error, kind);
+      setMediaError(message);
+      throw new Error(message);
+    }
+  }, [
+    refreshDevices,
+    selectedAudioInputId,
+    selectedVideoInputId,
+    setLocalStream,
+  ]);
+
+  const flushPendingIceCandidates = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc?.remoteDescription) return;
+
+    const candidates = pendingIceCandidatesRef.current.splice(0);
+    for (const candidate of candidates) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch {
+        updateActiveCall((call) => ({
+          ...call,
+          error: "A network candidate could not be added.",
+        }));
+      }
+    }
+  }, [updateActiveCall]);
 
   const createPeerConnection = useCallback(() => {
     const existing = peerConnectionRef.current;
@@ -354,6 +534,8 @@ export function useWebRTCCall({
       if (!current) return;
 
       if (pc.connectionState === "connected") {
+        reconnectAttemptsRef.current = 0;
+        clearReconnectTimeout();
         updateActiveCall((call) => ({
           ...call,
           connectedAt: call.connectedAt ?? Date.now(),
@@ -364,9 +546,34 @@ export function useWebRTCCall({
 
       if (pc.connectionState === "disconnected") {
         updateActiveCall((call) => ({ ...call, status: "reconnecting" }));
+        clearReconnectTimeout();
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          const latest = activeCallRef.current;
+          if (!latest || latest.status !== "reconnecting") return;
+          if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+            updateActiveCall((call) => ({
+              ...call,
+              error: "The network connection was interrupted.",
+              status: "ended",
+            }));
+            void logCall(latest, "failed");
+            cleanupCall(1200);
+            return;
+          }
+
+          reconnectAttemptsRef.current += 1;
+          void createAndSendOfferRef.current({ iceRestart: true });
+        }, 2500);
       }
 
       if (pc.connectionState === "failed") {
+        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttemptsRef.current += 1;
+          updateActiveCall((call) => ({ ...call, status: "reconnecting" }));
+          void createAndSendOfferRef.current({ iceRestart: true });
+          return;
+        }
+
         updateActiveCall((call) => ({
           ...call,
           error: "The peer connection failed.",
@@ -379,14 +586,21 @@ export function useWebRTCCall({
 
     peerConnectionRef.current = pc;
     return pc;
-  }, [cleanupCall, logCall, sendToCallChannel, setRemoteStream, updateActiveCall]);
+  }, [
+    cleanupCall,
+    clearReconnectTimeout,
+    logCall,
+    sendToCallChannel,
+    setRemoteStream,
+    updateActiveCall,
+  ]);
 
-  const createAndSendOffer = useCallback(async () => {
+  const createAndSendOffer = useCallback(async (options?: RTCOfferOptions) => {
     const current = activeCallRef.current;
     if (!current) return;
 
     const pc = createPeerConnection();
-    const offer = await pc.createOffer();
+    const offer = await pc.createOffer(options);
     await pc.setLocalDescription(offer);
 
     await sendToCallChannel({
@@ -395,6 +609,7 @@ export function useWebRTCCall({
       type: "offer",
     });
   }, [createPeerConnection, sendToCallChannel]);
+  createAndSendOfferRef.current = createAndSendOffer;
 
   const handleOffer = useCallback(
     async (signal: Extract<CallSignal, { type: "offer" }>) => {
@@ -403,6 +618,7 @@ export function useWebRTCCall({
 
       const pc = createPeerConnection();
       await pc.setRemoteDescription(signal.description);
+      await flushPendingIceCandidates();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       updateActiveCall((call) => ({
@@ -417,7 +633,7 @@ export function useWebRTCCall({
         type: "answer",
       });
     },
-    [createPeerConnection, sendToCallChannel, updateActiveCall]
+    [createPeerConnection, flushPendingIceCandidates, sendToCallChannel, updateActiveCall]
   );
 
   const handleAnswer = useCallback(
@@ -425,15 +641,20 @@ export function useWebRTCCall({
       const pc = peerConnectionRef.current;
       if (!pc) return;
       await pc.setRemoteDescription(signal.description);
+      await flushPendingIceCandidates();
       updateActiveCall((call) => ({ ...call, error: null, status: "connecting" }));
     },
-    [updateActiveCall]
+    [flushPendingIceCandidates, updateActiveCall]
   );
 
   const handleIceCandidate = useCallback(
     async (signal: Extract<CallSignal, { type: "ice-candidate" }>) => {
       const pc = peerConnectionRef.current;
       if (!pc || !signal.candidate) return;
+      if (!pc.remoteDescription) {
+        pendingIceCandidatesRef.current.push(signal.candidate);
+        return;
+      }
 
       try {
         await pc.addIceCandidate(signal.candidate);
@@ -514,7 +735,7 @@ export function useWebRTCCall({
 
       const channel = supabase
         .channel(`call:${callId}`, {
-          config: { broadcast: { self: false } },
+          config: { broadcast: { ack: true, self: false }, private: true },
         })
         .on("broadcast", { event: "call-signal" }, ({ payload }) => {
           void handleCallSignal(payload as SignalEnvelope);
@@ -533,6 +754,7 @@ export function useWebRTCCall({
 
       const current = activeCallRef.current;
       if (current && current.status !== "ended") {
+        await updateCallSession(envelope.callId, "busy");
         await sendToTemporaryCallChannel(envelope.callId, {
           callId: envelope.callId,
           conversationId: envelope.conversationId,
@@ -580,13 +802,21 @@ export function useWebRTCCall({
         // Ignore invalid or stale invites.
       }
     },
-    [cleanupCall, currentUser?.id, sendToTemporaryCallChannel, setActiveCall]
+    [
+      cleanupCall,
+      currentUser?.id,
+      sendToTemporaryCallChannel,
+      setActiveCall,
+      updateCallSession,
+    ]
   );
 
   const startCall = useCallback(
     async (conversationId: string, peer: CallPeer | null, kind: CallKind) => {
       if (!currentUser?.id || !peer) return;
       if (activeCallRef.current) return;
+
+      let createdCallId: string | null = null;
 
       try {
         const res = await fetch("/api/messages/calls", {
@@ -600,6 +830,7 @@ export function useWebRTCCall({
         }
 
         const data = (await res.json()) as CreateCallResponse;
+        createdCallId = data.callId;
         iceServersRef.current = data.iceServers;
 
         await getLocalMedia(kind);
@@ -649,9 +880,17 @@ export function useWebRTCCall({
           }
         }, CALL_RING_TIMEOUT_MS);
       } catch (error) {
+        if (createdCallId) {
+          void updateCallSession(
+            createdCallId,
+            "failed",
+            0,
+            error instanceof Error ? error.message : "Unable to start this call."
+          );
+        }
         stopMedia();
         setActiveCall({
-          callId: crypto.randomUUID(),
+          callId: createdCallId ?? crypto.randomUUID(),
           connectedAt: null,
           conversationId,
           direction: "outgoing",
@@ -679,6 +918,7 @@ export function useWebRTCCall({
       setActiveCall,
       stopMedia,
       updateActiveCall,
+      updateCallSession,
     ]
   );
 
@@ -690,6 +930,7 @@ export function useWebRTCCall({
       clearRingTimeout();
       await getLocalMedia(current.kind);
       await joinCallChannel(current.callId);
+      await updateCallSession(current.callId, "accepted");
       updateActiveCall((call) => ({ ...call, error: null, status: "connecting" }));
       await sendToCallChannel({
         callId: current.callId,
@@ -710,6 +951,12 @@ export function useWebRTCCall({
         conversationId: current.conversationId,
         type: "reject",
       });
+      await updateCallSession(
+        current.callId,
+        "rejected",
+        0,
+        error instanceof Error ? error.message : "Unable to access media."
+      );
       cleanupCall(1600);
     }
   }, [
@@ -720,6 +967,7 @@ export function useWebRTCCall({
     sendToCallChannel,
     sendToTemporaryCallChannel,
     updateActiveCall,
+    updateCallSession,
   ]);
 
   const rejectCall = useCallback(async () => {
@@ -756,7 +1004,14 @@ export function useWebRTCCall({
         type: "cancel",
       });
       await logCall(current, "cancelled");
-    } else if (current.status !== "incoming") {
+    } else if (current.status === "incoming") {
+      await sendToTemporaryCallChannel(current.callId, {
+        callId: current.callId,
+        conversationId: current.conversationId,
+        type: "reject",
+      });
+      await logCall(current, "rejected");
+    } else {
       await sendToCallChannel({
         callId: current.callId,
         conversationId: current.conversationId,
@@ -772,6 +1027,7 @@ export function useWebRTCCall({
     clearRingTimeout,
     logCall,
     sendToCallChannel,
+    sendToTemporaryCallChannel,
     sendToUserChannel,
     updateActiveCall,
   ]);
@@ -810,6 +1066,98 @@ export function useWebRTCCall({
     });
   }, [sendToCallChannel]);
 
+  const replaceLocalTrack = useCallback(
+    async (track: MediaStreamTrack, stream: MediaStream) => {
+      const pc = peerConnectionRef.current;
+      const existingStream = localStreamRef.current;
+      const oldTracks =
+        track.kind === "audio"
+          ? existingStream?.getAudioTracks() ?? []
+          : existingStream?.getVideoTracks() ?? [];
+
+      const sender = pc
+        ?.getSenders()
+        .find((item) => item.track?.kind === track.kind);
+
+      if (sender) {
+        await sender.replaceTrack(track);
+      } else if (pc) {
+        pc.addTrack(track, stream);
+        await renegotiate();
+      }
+
+      const nextStream = new MediaStream(
+        track.kind === "audio"
+          ? [track, ...(existingStream?.getVideoTracks() ?? [])]
+          : [...(existingStream?.getAudioTracks() ?? []), track]
+      );
+
+      setLocalStream(nextStream);
+      oldTracks.forEach((oldTrack) => {
+        if (oldTrack.id !== track.id) oldTrack.stop();
+      });
+    },
+    [renegotiate, setLocalStream]
+  );
+
+  const switchAudioInput = useCallback(
+    async (deviceId: string) => {
+      if (!navigator.mediaDevices?.getUserMedia) return;
+
+      try {
+        setMediaError(null);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: getAudioConstraints(deviceId),
+          video: false,
+        });
+        const track = stream.getAudioTracks()[0];
+        if (!track) return;
+        track.enabled = micEnabled;
+        await replaceLocalTrack(track, stream);
+        setSelectedAudioInputId(deviceId);
+      } catch (error) {
+        setMediaError(getMediaErrorMessage(error, "audio"));
+      }
+    },
+    [micEnabled, replaceLocalTrack]
+  );
+
+  const switchVideoInput = useCallback(
+    async (deviceId: string) => {
+      if (!navigator.mediaDevices?.getUserMedia) return;
+
+      try {
+        setMediaError(null);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: getVideoConstraints(deviceId),
+        });
+        const track = stream.getVideoTracks()[0];
+        if (!track) return;
+        track.enabled = cameraEnabled;
+        if (!screenSharing) {
+          await replaceLocalTrack(track, stream);
+        } else {
+          const existingStream = localStreamRef.current;
+          const nextStream = new MediaStream([
+            ...(existingStream?.getAudioTracks() ?? []),
+            track,
+          ]);
+          existingStream?.getVideoTracks().forEach((oldTrack) => oldTrack.stop());
+          setLocalStream(nextStream);
+        }
+        setSelectedVideoInputId(deviceId);
+      } catch (error) {
+        setMediaError(getMediaErrorMessage(error, "video"));
+      }
+    },
+    [cameraEnabled, replaceLocalTrack, screenSharing, setLocalStream]
+  );
+
+  const switchAudioOutput = useCallback((deviceId: string) => {
+    setSelectedAudioOutputId(deviceId);
+  }, []);
+
   const stopScreenShare = useCallback(async () => {
     const screenTrack = screenTrackRef.current;
     const pc = peerConnectionRef.current;
@@ -840,10 +1188,18 @@ export function useWebRTCCall({
     const pc = peerConnectionRef.current;
     if (!current || !pc || !navigator.mediaDevices?.getDisplayMedia) return;
 
-    const screenStream = await navigator.mediaDevices.getDisplayMedia({
-      audio: false,
-      video: true,
-    });
+    let screenStream: MediaStream;
+    try {
+      setMediaError(null);
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        audio: false,
+        video: true,
+      });
+    } catch {
+      setMediaError("Screen sharing permission was denied.");
+      return;
+    }
+
     const screenTrack = screenStream.getVideoTracks()[0];
     if (!screenTrack) return;
 
@@ -867,11 +1223,27 @@ export function useWebRTCCall({
   }, [renegotiate, screenSharing, stopScreenShare]);
 
   useEffect(() => {
+    void refreshDevices();
+
+    const handleDeviceChange = () => {
+      void refreshDevices();
+    };
+
+    navigator.mediaDevices?.addEventListener?.("devicechange", handleDeviceChange);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.(
+        "devicechange",
+        handleDeviceChange
+      );
+    };
+  }, [refreshDevices]);
+
+  useEffect(() => {
     if (!currentUser?.id) return;
 
     const channel = supabase
       .channel(`calls:user:${currentUser.id}`, {
-        config: { broadcast: { self: false } },
+        config: { broadcast: { ack: true, self: false }, private: true },
       })
       .on("broadcast", { event: "call-user-signal" }, ({ payload }) => {
         const envelope = payload as SignalEnvelope;
@@ -890,18 +1262,21 @@ export function useWebRTCCall({
         }
       });
 
-    channel.subscribe();
+    void subscribeChannel(channel).catch(() => {
+      setMediaError("Realtime calling channel could not be opened.");
+    });
     userChannelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
       if (userChannelRef.current === channel) userChannelRef.current = null;
     };
-  }, [cleanupCall, currentUser?.id, handleIncomingInvite]);
+  }, [cleanupCall, currentUser?.id, handleIncomingInvite, subscribeChannel]);
 
   useEffect(() => {
     return () => {
       clearRingTimeout();
+      clearReconnectTimeout();
       closePeerConnection();
       removeCallChannel();
       stopMedia();
@@ -909,21 +1284,65 @@ export function useWebRTCCall({
         supabase.removeChannel(userChannelRef.current);
       }
     };
-  }, [clearRingTimeout, closePeerConnection, removeCallChannel, stopMedia]);
+  }, [
+    clearReconnectTimeout,
+    clearRingTimeout,
+    closePeerConnection,
+    removeCallChannel,
+    stopMedia,
+  ]);
+
+  useEffect(() => {
+    const handlePageHide = () => {
+      const current = activeCallRef.current;
+      if (!current || current.status === "ended") return;
+
+      const durationSeconds = current.connectedAt
+        ? Math.floor((Date.now() - current.connectedAt) / 1000)
+        : 0;
+      const status =
+        current.status === "ringing"
+          ? "cancelled"
+          : current.connectedAt
+            ? "ended"
+            : "failed";
+
+      void fetch(`/api/messages/calls/${current.callId}`, {
+        body: JSON.stringify({ durationSeconds, status }),
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        method: "PATCH",
+      });
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    return () => window.removeEventListener("pagehide", handlePageHide);
+  }, []);
 
   return {
     acceptCall,
     activeCall,
+    audioInputDevices,
+    audioOutputDevices,
     cameraEnabled,
     endCall,
     localStream,
+    mediaError,
     micEnabled,
+    refreshDevices,
     rejectCall,
     remoteStream,
     screenSharing,
+    selectedAudioInputId,
+    selectedAudioOutputId,
+    selectedVideoInputId,
     startCall,
+    switchAudioInput,
+    switchAudioOutput,
+    switchVideoInput,
     toggleCamera,
     toggleMic,
     toggleScreenShare,
+    videoInputDevices,
   };
 }

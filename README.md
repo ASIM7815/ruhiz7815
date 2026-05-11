@@ -27,6 +27,10 @@ for signaling. Public STUN servers are configured by default. For production,
 add TURN credentials in `.env.local` so calls continue working on restrictive
 campus Wi-Fi and mobile networks.
 
+Before enabling calls in Supabase, run `scripts/setup-supabase-calls.sql` in the
+Supabase SQL Editor. It creates short-lived call sessions and private Realtime
+policies for the `calls:user:<user_id>` and `call:<call_id>` signaling channels.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

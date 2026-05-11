@@ -12,9 +12,40 @@ export type CallLogStatus =
   | "failed"
   | "missed"
   | "rejected";
+export type CallSessionStatus =
+  | "accepted"
+  | "busy"
+  | "cancelled"
+  | "ended"
+  | "failed"
+  | "missed"
+  | "rejected";
+
+export const terminalCallSessionStatuses = new Set<CallSessionStatus>([
+  "busy",
+  "cancelled",
+  "ended",
+  "failed",
+  "missed",
+  "rejected",
+]);
 
 export function isCallKind(value: unknown): value is CallKind {
   return value === "audio" || value === "video";
+}
+
+export function isCallSessionStatus(
+  value: unknown
+): value is CallSessionStatus {
+  return (
+    value === "accepted" ||
+    value === "busy" ||
+    value === "cancelled" ||
+    value === "ended" ||
+    value === "failed" ||
+    value === "missed" ||
+    value === "rejected"
+  );
 }
 
 export async function getConversationPeer(

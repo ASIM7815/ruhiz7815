@@ -125,6 +125,17 @@ function getVideoConstraints(deviceId: string | null): MediaTrackConstraints {
   };
 }
 
+function getCallMediaConstraints(
+  kind: CallKind,
+  audioDeviceId: string | null,
+  videoDeviceId: string | null
+): MediaStreamConstraints {
+  return {
+    audio: getAudioConstraints(audioDeviceId),
+    video: kind === "video" ? getVideoConstraints(videoDeviceId) : false,
+  };
+}
+
 export function useWebRTCCall({
   currentUser,
   onCallMessage,
@@ -452,13 +463,22 @@ export function useWebRTCCall({
 
     try {
       setMediaError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: getAudioConstraints(selectedAudioInputId),
-        video: kind === "video" ? getVideoConstraints(selectedVideoInputId) : false,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia(
+        getCallMediaConstraints(
+          kind,
+          selectedAudioInputId,
+          selectedVideoInputId
+        )
+      );
+      const audioTracks = stream.getAudioTracks();
+
+      if (audioTracks.length === 0) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new DOMException("No microphone track was returned.", "NotFoundError");
+      }
 
       setLocalStream(stream);
-      setMicEnabled(stream.getAudioTracks().some((track) => track.enabled));
+      setMicEnabled(audioTracks.some((track) => track.enabled));
       setCameraEnabled(stream.getVideoTracks().some((track) => track.enabled));
 
       stream.getTracks().forEach((track) => {
@@ -1033,16 +1053,22 @@ export function useWebRTCCall({
   ]);
 
   const toggleMic = useCallback(() => {
+    const audioTracks = localStreamRef.current?.getAudioTracks() ?? [];
+    if (audioTracks.length === 0) {
+      setMicEnabled(false);
+      return;
+    }
+
     const next = !micEnabled;
-    localStreamRef.current
-      ?.getAudioTracks()
-      .forEach((track) => {
-        track.enabled = next;
-      });
+    audioTracks.forEach((track) => {
+      track.enabled = next;
+    });
     setMicEnabled(next);
   }, [micEnabled]);
 
   const toggleCamera = useCallback(() => {
+    if (activeCallRef.current?.kind === "audio") return;
+
     const next = !cameraEnabled;
     localStreamRef.current
       ?.getVideoTracks()
@@ -1125,6 +1151,7 @@ export function useWebRTCCall({
   const switchVideoInput = useCallback(
     async (deviceId: string) => {
       if (!navigator.mediaDevices?.getUserMedia) return;
+      if (activeCallRef.current?.kind === "audio") return;
 
       try {
         setMediaError(null);
@@ -1186,7 +1213,14 @@ export function useWebRTCCall({
 
     const current = activeCallRef.current;
     const pc = peerConnectionRef.current;
-    if (!current || !pc || !navigator.mediaDevices?.getDisplayMedia) return;
+    if (
+      !current ||
+      current.kind !== "video" ||
+      !pc ||
+      !navigator.mediaDevices?.getDisplayMedia
+    ) {
+      return;
+    }
 
     let screenStream: MediaStream;
     try {

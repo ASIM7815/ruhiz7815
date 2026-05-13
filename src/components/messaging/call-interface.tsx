@@ -63,6 +63,14 @@ function formatDuration(startedAt: number | null, now: number) {
     .padStart(2, "0")}`;
 }
 
+function hasLiveTrack(stream: MediaStream | null, kind: MediaStreamTrack["kind"]) {
+  return (
+    stream?.getTracks().some(
+      (track) => track.kind === kind && track.readyState === "live"
+    ) ?? false
+  );
+}
+
 function DeviceSelect({
   disabled = false,
   label,
@@ -141,10 +149,21 @@ export function CallInterface({
   }, [remoteStream]);
 
   useEffect(() => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = remoteStream;
+    const audioElement = remoteAudioRef.current;
+    if (!audioElement) return;
+
+    const shouldMuteRemoteAudio =
+      activeCall?.kind === "video" && hasLiveTrack(remoteStream, "video");
+
+    audioElement.srcObject = remoteStream;
+    audioElement.muted = shouldMuteRemoteAudio;
+
+    if (!shouldMuteRemoteAudio && hasLiveTrack(remoteStream, "audio")) {
+      void audioElement.play().catch(() => {
+        // Browser autoplay policy can still require a user gesture.
+      });
     }
-  }, [remoteStream]);
+  }, [activeCall?.kind, remoteStream]);
 
   useEffect(() => {
     if (!remoteAudioRef.current || !selectedAudioOutputId) return;
@@ -153,7 +172,11 @@ export function CallInterface({
       setSinkId?: (sinkId: string) => Promise<void>;
     };
 
-    void audioElement.setSinkId?.(selectedAudioOutputId);
+    if (!audioElement.setSinkId) return;
+
+    void audioElement.setSinkId(selectedAudioOutputId).catch(() => {
+      // Some browsers/devices reject speaker routing changes.
+    });
   }, [selectedAudioOutputId]);
 
   useEffect(() => {
@@ -185,12 +208,9 @@ export function CallInterface({
   if (!activeCall) return null;
 
   const showRemoteVideo =
-    activeCall.kind === "video" &&
-    remoteStream?.getVideoTracks().some((track) => track.readyState === "live");
+    activeCall.kind === "video" && hasLiveTrack(remoteStream, "video");
 
-  const showLocalVideo =
-    localStream?.getVideoTracks().some((track) => track.readyState === "live") ??
-    false;
+  const showLocalVideo = hasLiveTrack(localStream, "video");
 
   if (activeCall.status === "incoming") {
     return (
@@ -249,7 +269,7 @@ export function CallInterface({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {screenSharing && (
+          {activeCall.kind === "video" && screenSharing && (
             <Badge variant="secondary" className="gap-1">
               <MonitorUp className="h-3 w-3" />
               Sharing
@@ -326,18 +346,20 @@ export function CallInterface({
             )}
           </Button>
         )}
-        <Button
-          size="icon"
-          variant={screenSharing ? "default" : "outline"}
-          className="hidden h-12 w-12 rounded-full sm:inline-flex"
-          onClick={onToggleScreenShare}
-        >
-          {screenSharing ? (
-            <Maximize2 className="h-5 w-5" />
-          ) : (
-            <MonitorUp className="h-5 w-5" />
-          )}
-        </Button>
+        {activeCall.kind === "video" && (
+          <Button
+            size="icon"
+            variant={screenSharing ? "default" : "outline"}
+            className="hidden h-12 w-12 rounded-full sm:inline-flex"
+            onClick={onToggleScreenShare}
+          >
+            {screenSharing ? (
+              <Maximize2 className="h-5 w-5" />
+            ) : (
+              <MonitorUp className="h-5 w-5" />
+            )}
+          </Button>
+        )}
         <Popover>
           <PopoverTrigger
             render={

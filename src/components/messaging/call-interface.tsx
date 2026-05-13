@@ -160,7 +160,9 @@ export function CallInterface({
   const statusText = useMemo(() => {
     if (!activeCall) return "";
     if (activeCall.status === "incoming") {
-      return `Incoming ${activeCall.kind} call`;
+      // Show "Audio call" or "Video call" based on isAudioOnly flag
+      const callType = activeCall.isAudioOnly ? "audio" : activeCall.kind;
+      return `Incoming ${callType} call`;
     }
     if (activeCall.status === "ringing") return "Ringing...";
     if (activeCall.status === "connecting") return "Connecting...";
@@ -171,11 +173,15 @@ export function CallInterface({
 
   if (!activeCall) return null;
 
+  // Hide video for audio-only calls
+  const isAudioOnly = activeCall.isAudioOnly ?? false;
+
   const showRemoteVideo =
+    !isAudioOnly &&
     activeCall.kind === "video" &&
     hasLiveTrack(remoteStream, "video");
 
-  const showLocalVideo = hasLiveTrack(localStream, "video");
+  const showLocalVideo = !isAudioOnly && hasLiveTrack(localStream, "video");
   const showRemoteAudioRetry =
     remoteAudioBlocked && hasLiveTrack(remoteStream, "audio");
 
@@ -246,7 +252,7 @@ export function CallInterface({
             </Badge>
           )}
           <Badge variant="outline" className="capitalize">
-            {activeCall.kind}
+            {isAudioOnly ? "audio" : activeCall.kind}
           </Badge>
         </div>
       </div>
@@ -314,7 +320,8 @@ export function CallInterface({
         >
           {micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
         </Button>
-        {activeCall.kind === "video" && (
+        {/* Only show camera toggle for video calls (not audio-only) */}
+        {!isAudioOnly && activeCall.kind === "video" && (
           <Button
             size="icon"
             variant={cameraEnabled ? "secondary" : "outline"}
@@ -328,18 +335,21 @@ export function CallInterface({
             )}
           </Button>
         )}
-        <Button
-          size="icon"
-          variant={screenSharing ? "default" : "outline"}
-          className="hidden h-12 w-12 rounded-full sm:inline-flex"
-          onClick={onToggleScreenShare}
-        >
-          {screenSharing ? (
-            <Maximize2 className="h-5 w-5" />
-          ) : (
-            <MonitorUp className="h-5 w-5" />
-          )}
-        </Button>
+        {/* Only show screen share for video calls (not audio-only) */}
+        {!isAudioOnly && (
+          <Button
+            size="icon"
+            variant={screenSharing ? "default" : "outline"}
+            className="hidden h-12 w-12 rounded-full sm:inline-flex"
+            onClick={onToggleScreenShare}
+          >
+            {screenSharing ? (
+              <Maximize2 className="h-5 w-5" />
+            ) : (
+              <MonitorUp className="h-5 w-5" />
+            )}
+          </Button>
+        )}
         <Button
           size="icon"
           variant="destructive"

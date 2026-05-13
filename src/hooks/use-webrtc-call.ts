@@ -36,6 +36,7 @@ export type ActiveCall = {
   direction: "incoming" | "outgoing";
   error: string | null;
   kind: CallKind;
+  isAudioOnly?: boolean; // Track if this is an audio-only call (video hidden in UI)
   peer: CallPeer;
   startedAt: number;
   status: CallStatus;
@@ -51,7 +52,7 @@ type UseWebRTCCallOptions = {
 };
 
 type CallSignal =
-  | { callId: string; caller: CallPeer; conversationId: string; kind: CallKind; type: "invite" }
+  | { callId: string; caller: CallPeer; conversationId: string; kind: CallKind; isAudioOnly?: boolean; type: "invite" }
   | { callId: string; conversationId?: string; type: "accept" | "busy" | "cancel" | "end" | "reject" }
   | { callId: string; description: RTCSessionDescriptionInit; type: "answer" }
   | { callId: string; description: RTCSessionDescriptionInit; type: "offer" }
@@ -332,7 +333,8 @@ export function useWebRTCCall({
           body: JSON.stringify({
             conversationId: call.conversationId,
             durationSeconds,
-            kind: call.kind,
+            // Log as "audio" if it was an audio-only call, otherwise use the actual kind
+            kind: call.isAudioOnly ? "audio" : call.kind,
             status,
           }),
           headers: { "Content-Type": "application/json" },
@@ -350,10 +352,13 @@ export function useWebRTCCall({
     [onCallMessage]
   );
 
-  const getLocalMedia = useCallback(async (kind: CallKind) => {
+  const getLocalMedia = useCallback(async (kind: CallKind, isAudioOnly = false) => {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error("This browser does not support audio or video calls.");
     }
+
+    // Always request video for audio-only calls to ensure reliable audio track acquisition
+    const actualKind = isAudioOnly ? "video" : kind;
 
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -362,7 +367,7 @@ export function useWebRTCCall({
         noiseSuppression: true,
       },
       video:
-        kind === "video"
+        actualKind === "video"
           ? {
               facingMode: "user",
               height: { ideal: 720 },
@@ -377,9 +382,17 @@ export function useWebRTCCall({
       throw new Error("No microphone track is available for this call.");
     }
 
+    // If this is an audio-only call, immediately stop and disable video tracks
+    if (isAudioOnly) {
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = false;
+        track.stop();
+      });
+    }
+
     setLocalStream(stream);
     setMicEnabled(audioTracks.some((track) => track.enabled));
-    setCameraEnabled(stream.getVideoTracks().some((track) => track.enabled));
+    setCameraEnabled(isAudioOnly ? false : stream.getVideoTracks().some((track) => track.enabled));
 
     stream.getTracks().forEach((track) => {
       track.onended = () => {
@@ -861,6 +874,7 @@ export function useWebRTCCall({
           direction: "incoming",
           error: null,
           kind: data.kind,
+          isAudioOnly: envelope.isAudioOnly ?? false, // Track if this is an audio-only call
           peer: data.caller,
           startedAt: Date.now(),
           status: "incoming",
@@ -884,9 +898,14 @@ export function useWebRTCCall({
       if (!currentUser?.id || !peer) return;
       if (activeCallRef.current) return;
 
+      // Track if this is an audio-only call (user clicked "Audio Call" button)
+      const isAudioOnly = kind === "audio";
+      // Always use "video" for backend to ensure reliable audio track acquisition
+      const backendKind: CallKind = "video";
+
       try {
         const res = await fetch("/api/messages/calls", {
-          body: JSON.stringify({ conversationId, kind }),
+          body: JSON.stringify({ conversationId, kind: backendKind }),
           headers: { "Content-Type": "application/json" },
           method: "POST",
         });
@@ -898,7 +917,8 @@ export function useWebRTCCall({
         const data = (await res.json()) as CreateCallResponse;
         iceServersRef.current = data.iceServers;
 
-        await getLocalMedia(kind);
+        // Get media with video enabled (even for audio-only calls)
+        await getLocalMedia(backendKind, isAudioOnly);
 
         const call: ActiveCall = {
           callId: data.callId,
@@ -906,7 +926,8 @@ export function useWebRTCCall({
           conversationId,
           direction: "outgoing",
           error: null,
-          kind,
+          kind: backendKind,
+          isAudioOnly, // Track the user's intent
           peer: data.peer,
           startedAt: Date.now(),
           status: "ringing",
@@ -923,7 +944,8 @@ export function useWebRTCCall({
             name: currentUser.name ?? "Unknown",
           },
           conversationId,
-          kind,
+          kind: backendKind,
+          isAudioOnly, // Tell the receiver this is audio-only
           type: "invite",
         });
 
@@ -959,7 +981,8 @@ export function useWebRTCCall({
             error instanceof Error
               ? error.message
               : "Unable to start this call.",
-          kind,
+          kind: isAudioOnly ? "audio" : kind,
+          isAudioOnly,
           peer,
           startedAt: Date.now(),
           status: "ended",
@@ -988,7 +1011,8 @@ export function useWebRTCCall({
 
     try {
       clearRingTimeout();
-      await getLocalMedia(current.kind);
+      // Get media with the isAudioOnly flag
+      await getLocalMedia(current.kind, current.isAudioOnly);
       await joinCallChannel(current.callId);
       updateActiveCall((call) => ({ ...call, error: null, status: "connecting" }));
       const acceptSent = await sendToCallChannel({

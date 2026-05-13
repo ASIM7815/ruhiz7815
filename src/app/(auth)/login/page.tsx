@@ -17,11 +17,11 @@ import Image from "next/image";
 export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
-  const supabase = createClient();
 
   const handleGoogleLogin = async () => {
     try {
       setGoogleLoading(true);
+      const supabase = createClient();
       
       console.log("[Google Login] Initiating Google OAuth flow...");
       
@@ -59,6 +59,7 @@ export default function LoginPage() {
   const handleGitHubLogin = async () => {
     try {
       setGithubLoading(true);
+      const supabase = createClient();
       
       // Clear any existing errors
       console.log("[GitHub Login] Initiating GitHub OAuth flow...");

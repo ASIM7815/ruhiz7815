@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Maximize2,
   Mic,
@@ -9,27 +9,40 @@ import {
   Phone,
   PhoneCall,
   PhoneOff,
+  Settings,
   Video,
   VideoOff,
+  Volume2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ActiveCall } from "@/hooks/use-webrtc-call";
 
 type CallInterfaceProps = {
   activeCall: ActiveCall | null;
+  audioInputDevices: MediaDeviceInfo[];
+  audioOutputDevices: MediaDeviceInfo[];
   cameraEnabled: boolean;
   localStream: MediaStream | null;
+  mediaError: string | null;
   micEnabled: boolean;
   onAccept: () => void;
   onEnd: () => void;
   onReject: () => void;
+  onSelectAudioInput: (deviceId: string) => void;
+  onSelectAudioOutput: (deviceId: string) => void;
+  onSelectVideoInput: (deviceId: string) => void;
   onToggleCamera: () => void;
   onToggleMic: () => void;
   onToggleScreenShare: () => void;
   remoteStream: MediaStream | null;
   screenSharing: boolean;
+  selectedAudioInputId: string | null;
+  selectedAudioOutputId: string | null;
+  selectedVideoInputId: string | null;
+  videoInputDevices: MediaDeviceInfo[];
 };
 
 function getInitials(name: string) {
@@ -51,23 +64,83 @@ function formatDuration(startedAt: number | null, now: number) {
     .padStart(2, "0")}`;
 }
 
+function hasLiveTrack(stream: MediaStream | null, kind: MediaStreamTrack["kind"]) {
+  return (
+    stream?.getTracks().some(
+      (track) => track.kind === kind && track.readyState === "live"
+    ) ?? false
+  );
+}
+
+function DeviceSelect({
+  disabled = false,
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  disabled?: boolean;
+  label: string;
+  onChange: (deviceId: string) => void;
+  options: MediaDeviceInfo[];
+  value: string | null;
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <select
+        className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        disabled={disabled}
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.length === 0 ? (
+          <option value="">Unavailable</option>
+        ) : (
+          options.map((device, index) => (
+            <option key={device.deviceId || index} value={device.deviceId}>
+              {device.label || `${label} ${index + 1}`}
+            </option>
+          ))
+        )}
+      </select>
+    </label>
+  );
+}
+
 export function CallInterface({
   activeCall,
+  audioInputDevices,
+  audioOutputDevices,
   cameraEnabled,
   localStream,
+  mediaError,
   micEnabled,
   onAccept,
   onEnd,
   onReject,
+  onSelectAudioInput,
+  onSelectAudioOutput,
+  onSelectVideoInput,
   onToggleCamera,
   onToggleMic,
   onToggleScreenShare,
   remoteStream,
   screenSharing,
+  selectedAudioInputId,
+  selectedAudioOutputId,
+  selectedVideoInputId,
+  videoInputDevices,
 }: CallInterfaceProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [durationTick, setDurationTick] = useState(() => Date.now());
+  const [remoteAudioBlocked, setRemoteAudioBlocked] = useState(false);
+
+  const setRemoteAudioBlockedSoon = useCallback((blocked: boolean) => {
+    window.setTimeout(() => setRemoteAudioBlocked(blocked), 0);
+  }, []);
 
   useEffect(() => {
     if (localVideoRef.current) {
@@ -78,8 +151,72 @@ export function CallInterface({
   useEffect(() => {
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.muted = true;
+      void remoteVideoRef.current.play().catch(() => {
+        // Muted remote video should autoplay; the audio element handles sound.
+      });
     }
   }, [remoteStream]);
+
+  const playRemoteAudio = useCallback(async () => {
+    const audioElement = remoteAudioRef.current;
+    if (
+      !audioElement ||
+      !hasLiveTrack(remoteStream, "audio")
+    ) {
+      return;
+    }
+
+    try {
+      audioElement.muted = false;
+      audioElement.volume = 1;
+      await audioElement.play();
+      setRemoteAudioBlockedSoon(false);
+    } catch {
+      setRemoteAudioBlockedSoon(true);
+    }
+  }, [remoteStream, setRemoteAudioBlockedSoon]);
+
+  useEffect(() => {
+    const audioElement = remoteAudioRef.current;
+    if (!audioElement) return;
+
+    audioElement.srcObject = remoteStream;
+    audioElement.muted = false;
+    audioElement.volume = 1;
+
+    const retryPlayback = () => {
+      void playRemoteAudio();
+    };
+
+    audioElement.addEventListener("canplay", retryPlayback);
+    audioElement.addEventListener("loadedmetadata", retryPlayback);
+
+    if (hasLiveTrack(remoteStream, "audio")) {
+      void playRemoteAudio();
+    } else {
+      setRemoteAudioBlockedSoon(false);
+    }
+
+    return () => {
+      audioElement.removeEventListener("canplay", retryPlayback);
+      audioElement.removeEventListener("loadedmetadata", retryPlayback);
+    };
+  }, [playRemoteAudio, remoteStream, setRemoteAudioBlockedSoon]);
+
+  useEffect(() => {
+    if (!remoteAudioRef.current || !selectedAudioOutputId) return;
+
+    const audioElement = remoteAudioRef.current as HTMLAudioElement & {
+      setSinkId?: (sinkId: string) => Promise<void>;
+    };
+
+    if (!audioElement.setSinkId) return;
+
+    void audioElement.setSinkId(selectedAudioOutputId).catch(() => {
+      // Some browsers/devices reject speaker routing changes.
+    });
+  }, [selectedAudioOutputId]);
 
   useEffect(() => {
     if (!activeCall?.connectedAt) return;
@@ -110,12 +247,12 @@ export function CallInterface({
   if (!activeCall) return null;
 
   const showRemoteVideo =
-    activeCall.kind === "video" &&
-    remoteStream?.getVideoTracks().some((track) => track.readyState === "live");
+    activeCall.kind === "video" && hasLiveTrack(remoteStream, "video");
 
-  const showLocalVideo =
-    localStream?.getVideoTracks().some((track) => track.readyState === "live") ??
-    false;
+  const showLocalVideo = hasLiveTrack(localStream, "video");
+  const showRemoteAudioRetry =
+    remoteAudioBlocked &&
+    hasLiveTrack(remoteStream, "audio");
 
   if (activeCall.status === "incoming") {
     return (
@@ -152,7 +289,19 @@ export function CallInterface({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background text-foreground">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-background text-foreground"
+      onPointerDownCapture={() => {
+        if (showRemoteAudioRetry) void playRemoteAudio();
+      }}
+    >
+      <audio
+        ref={remoteAudioRef}
+        autoPlay
+        playsInline
+        muted={false}
+        className="hidden"
+      />
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9">
@@ -161,11 +310,13 @@ export function CallInterface({
           </Avatar>
           <div>
             <p className="text-sm font-medium">{activeCall.peer.name}</p>
-            <p className="text-xs text-muted-foreground">{statusText}</p>
+            <p className="text-xs text-muted-foreground">
+              {mediaError ?? statusText}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {screenSharing && (
+          {activeCall.kind === "video" && screenSharing && (
             <Badge variant="secondary" className="gap-1">
               <MonitorUp className="h-3 w-3" />
               Sharing
@@ -182,6 +333,7 @@ export function CallInterface({
           <video
             ref={remoteVideoRef}
             autoPlay
+            muted
             playsInline
             className="h-full w-full object-contain"
           />
@@ -220,6 +372,17 @@ export function CallInterface({
       </div>
 
       <div className="flex items-center justify-center gap-3 border-t bg-background px-4 py-4">
+        {showRemoteAudioRetry && (
+          <Button
+            size="icon"
+            variant="outline"
+            className="h-12 w-12 rounded-full border-amber-500 text-amber-500"
+            onClick={playRemoteAudio}
+            aria-label="Play remote audio"
+          >
+            <Volume2 className="h-5 w-5" />
+          </Button>
+        )}
         <Button
           size="icon"
           variant={micEnabled ? "secondary" : "outline"}
@@ -242,18 +405,59 @@ export function CallInterface({
             )}
           </Button>
         )}
-        <Button
-          size="icon"
-          variant={screenSharing ? "default" : "outline"}
-          className="hidden h-12 w-12 rounded-full sm:inline-flex"
-          onClick={onToggleScreenShare}
-        >
-          {screenSharing ? (
-            <Maximize2 className="h-5 w-5" />
-          ) : (
-            <MonitorUp className="h-5 w-5" />
-          )}
-        </Button>
+        {activeCall.kind === "video" && (
+          <Button
+            size="icon"
+            variant={screenSharing ? "default" : "outline"}
+            className="hidden h-12 w-12 rounded-full sm:inline-flex"
+            onClick={onToggleScreenShare}
+          >
+            {screenSharing ? (
+              <Maximize2 className="h-5 w-5" />
+            ) : (
+              <MonitorUp className="h-5 w-5" />
+            )}
+          </Button>
+        )}
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-12 w-12 rounded-full"
+              />
+            }
+          >
+            <Settings className="h-5 w-5" />
+          </PopoverTrigger>
+          <PopoverContent side="top" className="w-72 gap-3">
+            <DeviceSelect
+              disabled={audioInputDevices.length === 0}
+              label="Microphone"
+              onChange={onSelectAudioInput}
+              options={audioInputDevices}
+              value={selectedAudioInputId}
+            />
+            {activeCall.kind === "video" && (
+              <DeviceSelect
+                disabled={videoInputDevices.length === 0}
+                label="Camera"
+                onChange={onSelectVideoInput}
+                options={videoInputDevices}
+                value={selectedVideoInputId}
+              />
+            )}
+            {audioOutputDevices.length > 0 && (
+              <DeviceSelect
+                label="Speaker"
+                onChange={onSelectAudioOutput}
+                options={audioOutputDevices}
+                value={selectedAudioOutputId}
+              />
+            )}
+          </PopoverContent>
+        </Popover>
         <Button
           size="icon"
           variant="destructive"

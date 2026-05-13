@@ -12,9 +12,40 @@ export type CallLogStatus =
   | "failed"
   | "missed"
   | "rejected";
+export type CallSessionStatus =
+  | "accepted"
+  | "busy"
+  | "cancelled"
+  | "ended"
+  | "failed"
+  | "missed"
+  | "rejected";
+
+export const terminalCallSessionStatuses = new Set<CallSessionStatus>([
+  "busy",
+  "cancelled",
+  "ended",
+  "failed",
+  "missed",
+  "rejected",
+]);
 
 export function isCallKind(value: unknown): value is CallKind {
   return value === "audio" || value === "video";
+}
+
+export function isCallSessionStatus(
+  value: unknown
+): value is CallSessionStatus {
+  return (
+    value === "accepted" ||
+    value === "busy" ||
+    value === "cancelled" ||
+    value === "ended" ||
+    value === "failed" ||
+    value === "missed" ||
+    value === "rejected"
+  );
 }
 
 export async function getConversationPeer(
@@ -81,6 +112,17 @@ export function getIceServers() {
       credential: turnCredential,
       urls: turnUrls,
       username: turnUsername,
+    });
+  } else if (process.env.DISABLE_PUBLIC_TURN_FALLBACK !== "true") {
+    // Fallback relay keeps calls usable on strict NATs when private TURN is not configured.
+    iceServers.push({
+      credential: "openrelayproject",
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+      ],
+      username: "openrelayproject",
     });
   }
 

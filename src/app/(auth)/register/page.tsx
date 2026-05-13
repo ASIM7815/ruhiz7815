@@ -17,11 +17,11 @@ import Image from "next/image";
 export default function RegisterPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
-  const supabase = createClient();
 
   const handleGoogleSignup = async () => {
     try {
       setGoogleLoading(true);
+      const supabase = createClient();
       
       console.log("[Google Signup] Initiating Google OAuth flow...");
       
@@ -59,6 +59,7 @@ export default function RegisterPage() {
   const handleGitHubSignup = async () => {
     try {
       setGithubLoading(true);
+      const supabase = createClient();
       
       console.log("[GitHub Signup] Initiating GitHub OAuth flow...");
       
@@ -147,4 +148,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-

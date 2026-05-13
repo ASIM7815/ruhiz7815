@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 let supabaseBrowserClient: SupabaseClient | null = null;
 
@@ -18,15 +19,15 @@ function getSupabaseBrowserConfig() {
   return { anonKey, url };
 }
 
-function getSupabaseBrowserClient() {
+export function createClient(): SupabaseClient {
   // Only create client on browser side
   if (typeof window === "undefined") {
-    return null as any;
+    return null as unknown as SupabaseClient;
   }
 
   if (!supabaseBrowserClient) {
     const { anonKey, url } = getSupabaseBrowserConfig();
-    supabaseBrowserClient = createClient(url, anonKey, {
+    supabaseBrowserClient = createBrowserClient(url, anonKey, {
       realtime: {
         params: {
           eventsPerSecond: 10,
@@ -36,6 +37,7 @@ function getSupabaseBrowserClient() {
         persistSession: true,
         autoRefreshToken: true,
       },
+      isSingleton: true,
     });
   }
   
@@ -44,7 +46,7 @@ function getSupabaseBrowserClient() {
 
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_target, prop) {
-    const client = getSupabaseBrowserClient();
+    const client = createClient();
     if (!client) {
       // Return no-op for server-side access
       return () => {};

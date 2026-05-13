@@ -25,7 +25,9 @@ Direct messages support one-to-one peer-to-peer WebRTC audio/video calls. The
 browser sends media directly when possible, while Supabase Realtime is used only
 for signaling. Public STUN servers are configured by default. For production,
 add TURN credentials in `.env.local` so calls continue working on restrictive
-campus Wi-Fi and mobile networks.
+campus Wi-Fi and mobile networks. A public relay fallback is used when no
+private TURN server is configured, but an app-owned TURN service is recommended
+for reliability.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

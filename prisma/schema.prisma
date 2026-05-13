@@ -1,0 +1,337 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  uid                String?   @unique
+  name               String
+  email              String    @unique
+  emailVerified      DateTime?  @map("email_verified")
+  password           String?
+  image              String?
+  bio                String?
+  university         String?
+  role               String    @default("MEMBER") // LEADER, MEMBER, BOTH
+  reputation         Int       @default(0)
+  onboardingComplete Boolean   @default(false) @map("onboarding_complete")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  accounts      Account[]
+  sessions      Session[]
+  skills        UserSkill[]
+  interests     UserInterest[]
+
+  ownedProjects    Project[]      @relation("ProjectOwner")
+  projectMembers   ProjectMember[]
+  sentMessages     Message[]      @relation("MessageSender")
+  notifications    Notification[]
+  resources        Resource[]
+  listings         Listing[]
+  startups         Startup[]
+  studyGroupMembers StudyGroupMember[]
+  joinRequests       JoinRequest[]
+  startupMembers     StartupMember[]
+  startupJoinRequests StartupJoinRequest[]
+  studyGroupJoinRequests StudyGroupJoinRequest[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model UserSkill {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  skill  String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skill])
+  @@map("user_skills")
+}
+
+model UserInterest {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  interest String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interest])
+  @@map("user_interests")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  title       String
+  problem     String
+  description String
+  status      String   @default("OPEN") // OPEN, IN_PROGRESS, COMPLETED
+  timeline    String?
+  maxMembers  Int      @default(4) @map("max_members")
+  ownerId     String   @map("owner_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  owner   User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members ProjectMember[]
+  skills  ProjectSkill[]
+  tasks   Task[]
+  messages Message[]
+  joinRequests JoinRequest[]
+
+  @@map("projects")
+}
+
+model ProjectSkill {
+  id        String @id @default(cuid())
+  projectId String @map("project_id")
+  skill     String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, skill])
+  @@map("project_skills")
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  role      String   @default("MEMBER") // LEADER, MEMBER
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  title       String
+  description String?
+  status      String   @default("TODO") // TODO, IN_PROGRESS, DONE
+  assigneeId  String?  @map("assignee_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("tasks")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  senderId  String   @map("sender_id")
+  projectId String?  @map("project_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sender  User     @relation("MessageSender", fields: [senderId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Resource {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        String   // NOTES, PAPER, MATERIAL
+  fileUrl     String?  @map("file_url")
+  university  String?
+  rating      Float    @default(0)
+  downloads   Int      @default(0)
+  authorId    String   @map("author_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@map("resources")
+}
+
+model StudyGroup {
+  id          String   @id @default(cuid())
+  name        String
+  subject     String
+  description String?
+  maxMembers  Int      @default(10) @map("max_members")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  members StudyGroupMember[]
+  joinRequests StudyGroupJoinRequest[]
+
+  @@map("study_groups")
+}
+
+model StudyGroupMember {
+  id        String   @id @default(cuid())
+  groupId   String   @map("group_id")
+  userId    String   @map("user_id")
+  role      String   @default("MEMBER")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("study_group_members")
+}
+
+model Listing {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  price       Float
+  category    String   // BOOK, GADGET, SERVICE
+  condition   String?  // NEW, LIKE_NEW, GOOD, FAIR
+  imageUrl    String?  @map("image_url")
+  sellerId    String   @map("seller_id")
+  sold        Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  seller User @relation(fields: [sellerId], references: [id])
+
+  @@map("listings")
+}
+
+model Startup {
+  id          String   @id @default(cuid())
+  name        String
+  problem     String
+  solution    String
+  stage       String   @default("IDEA") // IDEA, VALIDATION, BUILDING
+  lookingFor  String?  @map("looking_for")
+  founderId   String   @map("founder_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  founder User @relation(fields: [founderId], references: [id])
+  members StartupMember[]
+  joinRequests StartupJoinRequest[]
+
+  @@map("startups")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String   // TEAM_INVITE, PROJECT_UPDATE, MESSAGE, REPUTATION, etc.
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model JoinRequest {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  message   String?
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("join_requests")
+}
+
+model StartupMember {
+  id        String   @id @default(cuid())
+  startupId String   @map("startup_id")
+  userId    String   @map("user_id")
+  role      String   @default("MEMBER") // FOUNDER, MEMBER
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  startup Startup @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([startupId, userId])
+  @@map("startup_members")
+}
+
+model StartupJoinRequest {
+  id        String   @id @default(cuid())
+  startupId String   @map("startup_id")
+  userId    String   @map("user_id")
+  message   String?
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt DateTime @default(now()) @map("created_at")
+
+  startup Startup @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([startupId, userId])
+  @@map("startup_join_requests")
+}
+
+model StudyGroupJoinRequest {
+  id        String   @id @default(cuid())
+  groupId   String   @map("group_id")
+  userId    String   @map("user_id")
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt DateTime @default(now()) @map("created_at")
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("study_group_join_requests")
+}

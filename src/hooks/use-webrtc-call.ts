@@ -136,6 +136,23 @@ function getCallMediaConstraints(
   };
 }
 
+function hasAudioMediaSection(description: RTCSessionDescriptionInit) {
+  return (
+    description.sdp
+      ?.split(/\r?\n/)
+      .some((line) => {
+        const [media, port] = line.split(/\s+/);
+        return media === "m=audio" && port !== "0";
+      }) ?? false
+  );
+}
+
+function getCallSetupErrorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "Audio could not be negotiated for this call.";
+}
+
 export function useWebRTCCall({
   currentUser,
   onCallMessage,
@@ -523,6 +540,63 @@ export function useWebRTCCall({
     }
   }, [updateActiveCall]);
 
+  const ensureAudioSender = useCallback((pc: RTCPeerConnection) => {
+    const stream = localStreamRef.current;
+    const audioTrack = stream
+      ?.getAudioTracks()
+      .find((track) => track.readyState === "live");
+
+    if (!stream || !audioTrack) {
+      throw new Error("No live microphone track is available for this call.");
+    }
+
+    const hasLiveAudioSender = pc
+      .getSenders()
+      .some(
+        (sender) =>
+          sender.track?.kind === "audio" && sender.track.readyState === "live"
+      );
+
+    if (!hasLiveAudioSender) {
+      pc.addTrack(audioTrack, stream);
+    }
+  }, []);
+
+  const appendRemoteTrack = useCallback(
+    (event: RTCTrackEvent) => {
+      const tracksById = new Map<string, MediaStreamTrack>();
+
+      remoteStreamRef.current?.getTracks().forEach((track) => {
+        if (track.readyState === "live") tracksById.set(track.id, track);
+      });
+
+      event.streams[0]?.getTracks().forEach((track) => {
+        if (track.readyState === "live") tracksById.set(track.id, track);
+      });
+
+      if (event.track.readyState === "live") {
+        tracksById.set(event.track.id, event.track);
+      }
+
+      setRemoteStream(new MediaStream([...tracksById.values()]));
+
+      event.track.onended = () => {
+        const remainingTracks =
+          remoteStreamRef.current
+            ?.getTracks()
+            .filter(
+              (track) =>
+                track.id !== event.track.id && track.readyState === "live"
+            ) ?? [];
+
+        setRemoteStream(
+          remainingTracks.length > 0 ? new MediaStream(remainingTracks) : null
+        );
+      };
+    },
+    [setRemoteStream]
+  );
+
   const createPeerConnection = useCallback(() => {
     const existing = peerConnectionRef.current;
     if (existing) return existing;
@@ -545,8 +619,7 @@ export function useWebRTCCall({
     };
 
     pc.ontrack = (event) => {
-      const stream = event.streams[0] ?? new MediaStream([event.track]);
-      setRemoteStream(stream);
+      appendRemoteTrack(event);
     };
 
     pc.onconnectionstatechange = () => {
@@ -608,10 +681,10 @@ export function useWebRTCCall({
     return pc;
   }, [
     cleanupCall,
+    appendRemoteTrack,
     clearReconnectTimeout,
     logCall,
     sendToCallChannel,
-    setRemoteStream,
     updateActiveCall,
   ]);
 
@@ -619,16 +692,41 @@ export function useWebRTCCall({
     const current = activeCallRef.current;
     if (!current) return;
 
-    const pc = createPeerConnection();
-    const offer = await pc.createOffer(options);
-    await pc.setLocalDescription(offer);
+    try {
+      const pc = createPeerConnection();
+      ensureAudioSender(pc);
+      const offer = await pc.createOffer(options);
 
-    await sendToCallChannel({
-      callId: current.callId,
-      description: offer,
-      type: "offer",
-    });
-  }, [createPeerConnection, sendToCallChannel]);
+      if (!hasAudioMediaSection(offer)) {
+        throw new Error("The call offer did not include an audio channel.");
+      }
+
+      await pc.setLocalDescription(offer);
+
+      await sendToCallChannel({
+        callId: current.callId,
+        description: offer,
+        type: "offer",
+      });
+    } catch (error) {
+      const message = getCallSetupErrorMessage(error);
+      setMediaError(message);
+      updateActiveCall((call) => ({
+        ...call,
+        error: message,
+        status: "ended",
+      }));
+      void logCall(current, "failed");
+      cleanupCall(1200);
+    }
+  }, [
+    cleanupCall,
+    createPeerConnection,
+    ensureAudioSender,
+    logCall,
+    sendToCallChannel,
+    updateActiveCall,
+  ]);
   createAndSendOfferRef.current = createAndSendOffer;
 
   const handleOffer = useCallback(
@@ -636,35 +734,89 @@ export function useWebRTCCall({
       const current = activeCallRef.current;
       if (!current) return;
 
-      const pc = createPeerConnection();
-      await pc.setRemoteDescription(signal.description);
-      await flushPendingIceCandidates();
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      updateActiveCall((call) => ({
-        ...call,
-        error: null,
-        status: call.status === "incoming" ? "connecting" : call.status,
-      }));
+      try {
+        if (!hasAudioMediaSection(signal.description)) {
+          throw new Error("The incoming call offer did not include audio.");
+        }
 
-      await sendToCallChannel({
-        callId: current.callId,
-        description: answer,
-        type: "answer",
-      });
+        const pc = createPeerConnection();
+        ensureAudioSender(pc);
+        await pc.setRemoteDescription(signal.description);
+        await flushPendingIceCandidates();
+        const answer = await pc.createAnswer();
+
+        if (!hasAudioMediaSection(answer)) {
+          throw new Error("The call answer did not include an audio channel.");
+        }
+
+        await pc.setLocalDescription(answer);
+        updateActiveCall((call) => ({
+          ...call,
+          error: null,
+          status: call.status === "incoming" ? "connecting" : call.status,
+        }));
+
+        await sendToCallChannel({
+          callId: current.callId,
+          description: answer,
+          type: "answer",
+        });
+      } catch (error) {
+        const message = getCallSetupErrorMessage(error);
+        setMediaError(message);
+        updateActiveCall((call) => ({
+          ...call,
+          error: message,
+          status: "ended",
+        }));
+        void logCall(current, "failed");
+        cleanupCall(1200);
+      }
     },
-    [createPeerConnection, flushPendingIceCandidates, sendToCallChannel, updateActiveCall]
+    [
+      cleanupCall,
+      createPeerConnection,
+      ensureAudioSender,
+      flushPendingIceCandidates,
+      logCall,
+      sendToCallChannel,
+      updateActiveCall,
+    ]
   );
 
   const handleAnswer = useCallback(
     async (signal: Extract<CallSignal, { type: "answer" }>) => {
       const pc = peerConnectionRef.current;
       if (!pc) return;
-      await pc.setRemoteDescription(signal.description);
-      await flushPendingIceCandidates();
-      updateActiveCall((call) => ({ ...call, error: null, status: "connecting" }));
+
+      try {
+        if (!hasAudioMediaSection(signal.description)) {
+          throw new Error("The call answer did not include audio.");
+        }
+
+        await pc.setRemoteDescription(signal.description);
+        await flushPendingIceCandidates();
+        updateActiveCall((call) => ({
+          ...call,
+          error: null,
+          status: "connecting",
+        }));
+      } catch (error) {
+        const current = activeCallRef.current;
+        const message = getCallSetupErrorMessage(error);
+        setMediaError(message);
+        updateActiveCall((call) => ({
+          ...call,
+          error: message,
+          status: "ended",
+        }));
+        if (current) {
+          void logCall(current, "failed");
+        }
+        cleanupCall(1200);
+      }
     },
-    [flushPendingIceCandidates, updateActiveCall]
+    [cleanupCall, flushPendingIceCandidates, logCall, updateActiveCall]
   );
 
   const handleIceCandidate = useCallback(

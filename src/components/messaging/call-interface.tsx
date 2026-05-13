@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Maximize2,
   Mic,
@@ -12,6 +12,7 @@ import {
   Settings,
   Video,
   VideoOff,
+  Volume2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -135,6 +136,11 @@ export function CallInterface({
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [durationTick, setDurationTick] = useState(() => Date.now());
+  const [remoteAudioBlocked, setRemoteAudioBlocked] = useState(false);
+
+  const setRemoteAudioBlockedSoon = useCallback((blocked: boolean) => {
+    window.setTimeout(() => setRemoteAudioBlocked(blocked), 0);
+  }, []);
 
   useEffect(() => {
     if (localVideoRef.current) {
@@ -148,6 +154,24 @@ export function CallInterface({
     }
   }, [remoteStream]);
 
+  const playRemoteAudio = useCallback(async () => {
+    const audioElement = remoteAudioRef.current;
+    if (
+      !audioElement ||
+      audioElement.muted ||
+      !hasLiveTrack(remoteStream, "audio")
+    ) {
+      return;
+    }
+
+    try {
+      await audioElement.play();
+      setRemoteAudioBlockedSoon(false);
+    } catch {
+      setRemoteAudioBlockedSoon(true);
+    }
+  }, [remoteStream, setRemoteAudioBlockedSoon]);
+
   useEffect(() => {
     const audioElement = remoteAudioRef.current;
     if (!audioElement) return;
@@ -158,12 +182,10 @@ export function CallInterface({
     audioElement.srcObject = remoteStream;
     audioElement.muted = shouldMuteRemoteAudio;
 
-    if (!shouldMuteRemoteAudio && hasLiveTrack(remoteStream, "audio")) {
-      void audioElement.play().catch(() => {
-        // Browser autoplay policy can still require a user gesture.
-      });
-    }
-  }, [activeCall?.kind, remoteStream]);
+    if (shouldMuteRemoteAudio || !hasLiveTrack(remoteStream, "audio")) return;
+
+    void playRemoteAudio();
+  }, [activeCall?.kind, playRemoteAudio, remoteStream]);
 
   useEffect(() => {
     if (!remoteAudioRef.current || !selectedAudioOutputId) return;
@@ -211,6 +233,10 @@ export function CallInterface({
     activeCall.kind === "video" && hasLiveTrack(remoteStream, "video");
 
   const showLocalVideo = hasLiveTrack(localStream, "video");
+  const showRemoteAudioRetry =
+    remoteAudioBlocked &&
+    hasLiveTrack(remoteStream, "audio") &&
+    !(activeCall.kind === "video" && showRemoteVideo);
 
   if (activeCall.status === "incoming") {
     return (
@@ -247,7 +273,12 @@ export function CallInterface({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background text-foreground">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-background text-foreground"
+      onPointerDownCapture={() => {
+        if (showRemoteAudioRetry) void playRemoteAudio();
+      }}
+    >
       <audio
         ref={remoteAudioRef}
         autoPlay
@@ -324,6 +355,17 @@ export function CallInterface({
       </div>
 
       <div className="flex items-center justify-center gap-3 border-t bg-background px-4 py-4">
+        {showRemoteAudioRetry && (
+          <Button
+            size="icon"
+            variant="outline"
+            className="h-12 w-12 rounded-full border-amber-500 text-amber-500"
+            onClick={playRemoteAudio}
+            aria-label="Play remote audio"
+          >
+            <Volume2 className="h-5 w-5" />
+          </Button>
+        )}
         <Button
           size="icon"
           variant={micEnabled ? "secondary" : "outline"}

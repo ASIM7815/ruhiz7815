@@ -279,7 +279,7 @@ export function useWebRTCCall({
       if (!currentUser?.id) return false;
 
       const channel = supabase.channel(`call:${callId}`, {
-        config: { broadcast: { ack: true, self: false }, private: true },
+        config: { broadcast: { ack: true, self: false }, private: false },
       });
 
       try {
@@ -300,7 +300,7 @@ export function useWebRTCCall({
       if (!currentUser?.id) return false;
 
       const channel = supabase.channel(`calls:user:${userId}`, {
-        config: { broadcast: { ack: true, self: false }, private: true },
+        config: { broadcast: { ack: true, self: false }, private: false },
       });
 
       try {
@@ -823,7 +823,7 @@ export function useWebRTCCall({
 
       const channel = supabase
         .channel(`call:${callId}`, {
-          config: { broadcast: { ack: true, self: false }, private: true },
+          config: { broadcast: { ack: true, self: false }, private: false },
         })
         .on("broadcast", { event: "call-signal" }, ({ payload }) => {
           void handleCallSignal(payload as SignalEnvelope);
@@ -1213,7 +1213,7 @@ export function useWebRTCCall({
 
     const channel = supabase
       .channel(`calls:user:${currentUser.id}`, {
-        config: { broadcast: { ack: true, self: false }, private: true },
+        config: { broadcast: { ack: true, self: false }, private: false },
       })
       .on("broadcast", { event: "call-user-signal" }, ({ payload }) => {
         const envelope = payload as SignalEnvelope;

@@ -151,6 +151,10 @@ export function CallInterface({
   useEffect(() => {
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.muted = true;
+      void remoteVideoRef.current.play().catch(() => {
+        // Muted remote video should autoplay; the audio element handles sound.
+      });
     }
   }, [remoteStream]);
 
@@ -158,13 +162,14 @@ export function CallInterface({
     const audioElement = remoteAudioRef.current;
     if (
       !audioElement ||
-      audioElement.muted ||
       !hasLiveTrack(remoteStream, "audio")
     ) {
       return;
     }
 
     try {
+      audioElement.muted = false;
+      audioElement.volume = 1;
       await audioElement.play();
       setRemoteAudioBlockedSoon(false);
     } catch {
@@ -176,16 +181,28 @@ export function CallInterface({
     const audioElement = remoteAudioRef.current;
     if (!audioElement) return;
 
-    const shouldMuteRemoteAudio =
-      activeCall?.kind === "video" && hasLiveTrack(remoteStream, "video");
-
     audioElement.srcObject = remoteStream;
-    audioElement.muted = shouldMuteRemoteAudio;
+    audioElement.muted = false;
+    audioElement.volume = 1;
 
-    if (shouldMuteRemoteAudio || !hasLiveTrack(remoteStream, "audio")) return;
+    const retryPlayback = () => {
+      void playRemoteAudio();
+    };
 
-    void playRemoteAudio();
-  }, [activeCall?.kind, playRemoteAudio, remoteStream]);
+    audioElement.addEventListener("canplay", retryPlayback);
+    audioElement.addEventListener("loadedmetadata", retryPlayback);
+
+    if (hasLiveTrack(remoteStream, "audio")) {
+      void playRemoteAudio();
+    } else {
+      setRemoteAudioBlockedSoon(false);
+    }
+
+    return () => {
+      audioElement.removeEventListener("canplay", retryPlayback);
+      audioElement.removeEventListener("loadedmetadata", retryPlayback);
+    };
+  }, [playRemoteAudio, remoteStream, setRemoteAudioBlockedSoon]);
 
   useEffect(() => {
     if (!remoteAudioRef.current || !selectedAudioOutputId) return;
@@ -235,8 +252,7 @@ export function CallInterface({
   const showLocalVideo = hasLiveTrack(localStream, "video");
   const showRemoteAudioRetry =
     remoteAudioBlocked &&
-    hasLiveTrack(remoteStream, "audio") &&
-    !(activeCall.kind === "video" && showRemoteVideo);
+    hasLiveTrack(remoteStream, "audio");
 
   if (activeCall.status === "incoming") {
     return (
@@ -283,7 +299,7 @@ export function CallInterface({
         ref={remoteAudioRef}
         autoPlay
         playsInline
-        muted={showRemoteVideo}
+        muted={false}
         className="hidden"
       />
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -317,6 +333,7 @@ export function CallInterface({
           <video
             ref={remoteVideoRef}
             autoPlay
+            muted
             playsInline
             className="h-full w-full object-contain"
           />

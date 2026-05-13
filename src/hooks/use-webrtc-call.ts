@@ -147,11 +147,34 @@ function hasAudioMediaSection(description: RTCSessionDescriptionInit) {
   );
 }
 
+function hasLiveAudioTrack(stream: MediaStream | null) {
+  return (
+    stream?.getAudioTracks().some((track) => track.readyState === "live") ??
+    false
+  );
+}
+
 function getCallSetupErrorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
     : "Audio could not be negotiated for this call.";
 }
+
+async function sendBroadcastSignal(
+  channel: RealtimeChannel,
+  event: "call-signal" | "call-user-signal",
+  payload: SignalEnvelope
+) {
+  const result = await channel.send({
+    event,
+    payload,
+    type: "broadcast",
+  });
+
+  return result === "ok";
+}
+
+const SIGNAL_SEND_ERROR = "Realtime signaling message could not be delivered.";
 
 export function useWebRTCCall({
   currentUser,
@@ -319,19 +342,19 @@ export function useWebRTCCall({
 
   const sendToCallChannel = useCallback(
     async (signal: CallSignal) => {
-      if (!currentUser?.id || !callChannelRef.current) return;
-      await callChannelRef.current.send({
-        event: "call-signal",
-        payload: { ...signal, from: currentUser.id } satisfies SignalEnvelope,
-        type: "broadcast",
-      });
+      if (!currentUser?.id || !callChannelRef.current) return false;
+
+      return sendBroadcastSignal(callChannelRef.current, "call-signal", {
+        ...signal,
+        from: currentUser.id,
+      } satisfies SignalEnvelope);
     },
     [currentUser?.id]
   );
 
   const sendToTemporaryCallChannel = useCallback(
     async (callId: string, signal: CallSignal) => {
-      if (!currentUser?.id) return;
+      if (!currentUser?.id) return false;
 
       const channel = supabase.channel(`call:${callId}`, {
         config: { broadcast: { ack: true, self: false }, private: true },
@@ -339,11 +362,10 @@ export function useWebRTCCall({
 
       try {
         await subscribeChannel(channel);
-        await channel.send({
-          event: "call-signal",
-          payload: { ...signal, from: currentUser.id } satisfies SignalEnvelope,
-          type: "broadcast",
-        });
+        return await sendBroadcastSignal(channel, "call-signal", {
+          ...signal,
+          from: currentUser.id,
+        } satisfies SignalEnvelope);
       } finally {
         window.setTimeout(() => supabase.removeChannel(channel), 500);
       }
@@ -353,7 +375,7 @@ export function useWebRTCCall({
 
   const sendToUserChannel = useCallback(
     async (userId: string, signal: CallSignal) => {
-      if (!currentUser?.id) return;
+      if (!currentUser?.id) return false;
 
       const channel = supabase.channel(`calls:user:${userId}`, {
         config: { broadcast: { ack: true, self: false }, private: true },
@@ -361,11 +383,10 @@ export function useWebRTCCall({
 
       try {
         await subscribeChannel(channel);
-        await channel.send({
-          event: "call-user-signal",
-          payload: { ...signal, from: currentUser.id } satisfies SignalEnvelope,
-          type: "broadcast",
-        });
+        return await sendBroadcastSignal(channel, "call-user-signal", {
+          ...signal,
+          from: currentUser.id,
+        } satisfies SignalEnvelope);
       } finally {
         window.setTimeout(() => supabase.removeChannel(channel), 500);
       }
@@ -562,6 +583,19 @@ export function useWebRTCCall({
     }
   }, []);
 
+  const markCallConnected = useCallback(() => {
+    if (!hasLiveAudioTrack(remoteStreamRef.current)) return;
+
+    reconnectAttemptsRef.current = 0;
+    clearReconnectTimeout();
+    updateActiveCall((call) => ({
+      ...call,
+      connectedAt: call.connectedAt ?? Date.now(),
+      error: null,
+      status: "connected",
+    }));
+  }, [clearReconnectTimeout, updateActiveCall]);
+
   const appendRemoteTrack = useCallback(
     (event: RTCTrackEvent) => {
       const tracksById = new Map<string, MediaStreamTrack>();
@@ -578,7 +612,17 @@ export function useWebRTCCall({
         tracksById.set(event.track.id, event.track);
       }
 
-      setRemoteStream(new MediaStream([...tracksById.values()]));
+      const nextStream = new MediaStream([...tracksById.values()]);
+      setRemoteStream(nextStream);
+
+      if (
+        hasLiveAudioTrack(nextStream) &&
+        (peerConnectionRef.current?.connectionState === "connected" ||
+          peerConnectionRef.current?.iceConnectionState === "connected" ||
+          peerConnectionRef.current?.iceConnectionState === "completed")
+      ) {
+        markCallConnected();
+      }
 
       event.track.onended = () => {
         const remainingTracks =
@@ -594,14 +638,17 @@ export function useWebRTCCall({
         );
       };
     },
-    [setRemoteStream]
+    [markCallConnected, setRemoteStream]
   );
 
   const createPeerConnection = useCallback(() => {
     const existing = peerConnectionRef.current;
     if (existing) return existing;
 
-    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
+    const pc = new RTCPeerConnection({
+      iceCandidatePoolSize: 4,
+      iceServers: iceServersRef.current,
+    });
 
     localStreamRef.current?.getTracks().forEach((track) => {
       pc.addTrack(track, localStreamRef.current as MediaStream);
@@ -615,7 +662,21 @@ export function useWebRTCCall({
         callId: current.callId,
         candidate: event.candidate.toJSON(),
         type: "ice-candidate",
-      });
+      })
+        .then((sent) => {
+          if (!sent) {
+            updateActiveCall((call) => ({
+              ...call,
+              error: "A network candidate could not be sent.",
+            }));
+          }
+        })
+        .catch(() => {
+          updateActiveCall((call) => ({
+            ...call,
+            error: "A network candidate could not be sent.",
+          }));
+        });
     };
 
     pc.ontrack = (event) => {
@@ -627,14 +688,7 @@ export function useWebRTCCall({
       if (!current) return;
 
       if (pc.connectionState === "connected") {
-        reconnectAttemptsRef.current = 0;
-        clearReconnectTimeout();
-        updateActiveCall((call) => ({
-          ...call,
-          connectedAt: call.connectedAt ?? Date.now(),
-          error: null,
-          status: "connected",
-        }));
+        markCallConnected();
       }
 
       if (pc.connectionState === "disconnected") {
@@ -677,6 +731,15 @@ export function useWebRTCCall({
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      if (
+        pc.iceConnectionState === "connected" ||
+        pc.iceConnectionState === "completed"
+      ) {
+        markCallConnected();
+      }
+    };
+
     peerConnectionRef.current = pc;
     return pc;
   }, [
@@ -684,6 +747,7 @@ export function useWebRTCCall({
     appendRemoteTrack,
     clearReconnectTimeout,
     logCall,
+    markCallConnected,
     sendToCallChannel,
     updateActiveCall,
   ]);
@@ -703,11 +767,15 @@ export function useWebRTCCall({
 
       await pc.setLocalDescription(offer);
 
-      await sendToCallChannel({
+      const offerSent = await sendToCallChannel({
         callId: current.callId,
         description: offer,
         type: "offer",
       });
+
+      if (!offerSent) {
+        throw new Error(SIGNAL_SEND_ERROR);
+      }
     } catch (error) {
       const message = getCallSetupErrorMessage(error);
       setMediaError(message);
@@ -756,11 +824,17 @@ export function useWebRTCCall({
           status: call.status === "incoming" ? "connecting" : call.status,
         }));
 
-        await sendToCallChannel({
+        const answerSent = await sendToCallChannel({
           callId: current.callId,
           description: answer,
           type: "answer",
         });
+
+        if (!answerSent) {
+          throw new Error(SIGNAL_SEND_ERROR);
+        }
+
+        markCallConnected();
       } catch (error) {
         const message = getCallSetupErrorMessage(error);
         setMediaError(message);
@@ -779,6 +853,7 @@ export function useWebRTCCall({
       ensureAudioSender,
       flushPendingIceCandidates,
       logCall,
+      markCallConnected,
       sendToCallChannel,
       updateActiveCall,
     ]
@@ -801,6 +876,7 @@ export function useWebRTCCall({
           error: null,
           status: "connecting",
         }));
+        markCallConnected();
       } catch (error) {
         const current = activeCallRef.current;
         const message = getCallSetupErrorMessage(error);
@@ -816,13 +892,25 @@ export function useWebRTCCall({
         cleanupCall(1200);
       }
     },
-    [cleanupCall, flushPendingIceCandidates, logCall, updateActiveCall]
+    [
+      cleanupCall,
+      flushPendingIceCandidates,
+      logCall,
+      markCallConnected,
+      updateActiveCall,
+    ]
   );
 
   const handleIceCandidate = useCallback(
     async (signal: Extract<CallSignal, { type: "ice-candidate" }>) => {
       const pc = peerConnectionRef.current;
-      if (!pc || !signal.candidate) return;
+      if (!signal.candidate) return;
+
+      if (!pc) {
+        pendingIceCandidatesRef.current.push(signal.candidate);
+        return;
+      }
+
       if (!pc.remoteDescription) {
         pendingIceCandidatesRef.current.push(signal.candidate);
         return;
@@ -931,7 +1019,7 @@ export function useWebRTCCall({
           callId: envelope.callId,
           conversationId: envelope.conversationId,
           type: "busy",
-        });
+        }).catch(() => false);
         return;
       }
 
@@ -1022,7 +1110,7 @@ export function useWebRTCCall({
         setActiveCall(call);
         await joinCallChannel(data.callId);
 
-        await sendToUserChannel(data.peer.id, {
+        const inviteSent = await sendToUserChannel(data.peer.id, {
           callId: data.callId,
           caller: {
             id: currentUser.id,
@@ -1034,6 +1122,10 @@ export function useWebRTCCall({
           type: "invite",
         });
 
+        if (!inviteSent) {
+          throw new Error(SIGNAL_SEND_ERROR);
+        }
+
         ringTimeoutRef.current = window.setTimeout(() => {
           const latest = activeCallRef.current;
           if (latest?.callId === data.callId && latest.status === "ringing") {
@@ -1041,7 +1133,7 @@ export function useWebRTCCall({
               callId: data.callId,
               conversationId,
               type: "cancel",
-            });
+            }).catch(() => false);
             void logCall(latest, "missed");
             updateActiveCall((currentCall) => ({
               ...currentCall,
@@ -1104,11 +1196,14 @@ export function useWebRTCCall({
       await joinCallChannel(current.callId);
       await updateCallSession(current.callId, "accepted");
       updateActiveCall((call) => ({ ...call, error: null, status: "connecting" }));
-      await sendToCallChannel({
+      const acceptSent = await sendToCallChannel({
         callId: current.callId,
         conversationId: current.conversationId,
         type: "accept",
       });
+      if (!acceptSent) {
+        throw new Error(SIGNAL_SEND_ERROR);
+      }
     } catch (error) {
       updateActiveCall((call) => ({
         ...call,
@@ -1122,7 +1217,7 @@ export function useWebRTCCall({
         callId: current.callId,
         conversationId: current.conversationId,
         type: "reject",
-      });
+      }).catch(() => false);
       await updateCallSession(
         current.callId,
         "rejected",
@@ -1151,7 +1246,7 @@ export function useWebRTCCall({
       callId: current.callId,
       conversationId: current.conversationId,
       type: "reject",
-    });
+    }).catch(() => false);
     await logCall(current, "rejected");
     updateActiveCall((call) => ({ ...call, status: "ended" }));
     cleanupCall(600);
@@ -1174,21 +1269,21 @@ export function useWebRTCCall({
         callId: current.callId,
         conversationId: current.conversationId,
         type: "cancel",
-      });
+      }).catch(() => false);
       await logCall(current, "cancelled");
     } else if (current.status === "incoming") {
       await sendToTemporaryCallChannel(current.callId, {
         callId: current.callId,
         conversationId: current.conversationId,
         type: "reject",
-      });
+      }).catch(() => false);
       await logCall(current, "rejected");
     } else {
       await sendToCallChannel({
         callId: current.callId,
         conversationId: current.conversationId,
         type: "end",
-      });
+      }).catch(() => false);
       await logCall(current, current.connectedAt ? "ended" : "failed");
     }
 
@@ -1237,11 +1332,15 @@ export function useWebRTCCall({
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    await sendToCallChannel({
+    const offerSent = await sendToCallChannel({
       callId: current.callId,
       description: offer,
       type: "offer",
     });
+
+    if (!offerSent) {
+      setMediaError(SIGNAL_SEND_ERROR);
+    }
   }, [sendToCallChannel]);
 
   const replaceLocalTrack = useCallback(

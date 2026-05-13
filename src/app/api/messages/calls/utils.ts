@@ -113,6 +113,17 @@ export function getIceServers() {
       urls: turnUrls,
       username: turnUsername,
     });
+  } else if (process.env.DISABLE_PUBLIC_TURN_FALLBACK !== "true") {
+    // Fallback relay keeps calls usable on strict NATs when private TURN is not configured.
+    iceServers.push({
+      credential: "openrelayproject",
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+      ],
+      username: "openrelayproject",
+    });
   }
 
   return iceServers;

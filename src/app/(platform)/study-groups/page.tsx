@@ -82,7 +82,10 @@ export default function StudyGroupsPage() {
   useEffect(() => {
     fetch("/api/study-groups")
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          console.error(`Failed to load study groups: HTTP ${r.status}`);
+          return { groups: [] };
+        }
         return r.json();
       })
       .then((data) => {
@@ -104,6 +107,7 @@ export default function StudyGroupsPage() {
       if (!res.ok) {
         console.error("Failed to load my study groups:", res.status);
         setMyGroups([]);
+        setMyLoading(false);
         return;
       }
       const data = await res.json();
@@ -115,7 +119,14 @@ export default function StudyGroupsPage() {
           try {
             const reqRes = await fetch(`/api/study-groups/${g.id}/join`);
             const isLeader = reqRes.ok;
-            const pendingRequests = isLeader ? await reqRes.json() : [];
+            let pendingRequests = [];
+            if (isLeader) {
+              try {
+                pendingRequests = await reqRes.json();
+              } catch {
+                pendingRequests = [];
+              }
+            }
             return { ...g, isLeader, pendingRequests } as MyGroup;
           } catch (err) {
             console.error(`Failed to load requests for group ${g.id}:`, err);

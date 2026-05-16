@@ -55,7 +55,10 @@ export default function ProfilePage() {
           window.location.href = "/login";
           return null;
         }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          console.error(`Failed to load profile: HTTP ${r.status}`);
+          return null;
+        }
         return r.json();
       })
       .then((data) => {

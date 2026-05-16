@@ -100,7 +100,10 @@ export default function MarketplacePage() {
           setAccessDenied(true);
           return { listings: [] };
         }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          console.error(`Failed to load marketplace: HTTP ${r.status}`);
+          return { listings: [] };
+        }
         return r.json();
       })
       .then((data) => {

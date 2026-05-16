@@ -97,7 +97,10 @@ export default function KnowledgeHubPage() {
     if (filter === "Materials") params.set("type", "MATERIAL");
     fetch(`/api/resources?${params}`)
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          console.error(`Failed to load resources: HTTP ${r.status}`);
+          return { resources: [] };
+        }
         return r.json();
       })
       .then((data) => {

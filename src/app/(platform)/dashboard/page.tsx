@@ -48,10 +48,16 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch("/api/dashboard")
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          console.error(`Failed to load dashboard: HTTP ${r.status}`);
+          return null;
+        }
         return r.json();
       })
-      .then((d) => { setData(d); setLoading(false); })
+      .then((d) => { 
+        if (d) setData(d); 
+        setLoading(false); 
+      })
       .catch((err) => {
         console.error("Failed to load dashboard:", err);
         setLoading(false);

@@ -82,7 +82,10 @@ export default function ProjectsPage() {
     if (filter === "In Progress") params.set("status", "IN_PROGRESS");
     fetch(`/api/projects?${params}`)
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          console.error(`Failed to load projects: HTTP ${r.status}`);
+          return { projects: [] }; // Return empty array instead of throwing
+        }
         return r.json();
       })
       .then((data) => {
@@ -104,6 +107,7 @@ export default function ProjectsPage() {
       if (!res.ok) {
         console.error("Failed to load my projects:", res.status);
         setMyProjects([]);
+        setMyLoading(false);
         return;
       }
       const data = await res.json();
@@ -112,7 +116,10 @@ export default function ProjectsPage() {
         owned.map(async (p) => {
           try {
             const rr = await fetch(`/api/projects/${p.id}/join`);
-            const reqs = rr.ok ? await rr.json() : [];
+            if (!rr.ok) {
+              return { ...p, pendingRequests: [] } as MyProject;
+            }
+            const reqs = await rr.json();
             return { ...p, pendingRequests: reqs } as MyProject;
           } catch (err) {
             console.error(`Failed to load requests for project ${p.id}:`, err);

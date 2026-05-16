@@ -107,7 +107,10 @@ export default function StartupsPage() {
     if (filter === "Building") params.set("stage", "BUILDING");
     fetch(`/api/startups?${params}`)
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          console.error(`Failed to load startups: HTTP ${r.status}`);
+          return { startups: [] };
+        }
         return r.json();
       })
       .then((data) => {
@@ -129,6 +132,7 @@ export default function StartupsPage() {
       if (!res.ok) {
         console.error("Failed to load my startups:", res.status);
         setMyStartups([]);
+        setMyLoading(false);
         return;
       }
       const data = await res.json();
@@ -137,7 +141,10 @@ export default function StartupsPage() {
         owned.map(async (s) => {
           try {
             const rr = await fetch(`/api/startups/${s.id}/join`);
-            const reqs = rr.ok ? await rr.json() : [];
+            if (!rr.ok) {
+              return { ...s, pendingRequests: [] } as MyStartup;
+            }
+            const reqs = await rr.json();
             return { ...s, pendingRequests: reqs } as MyStartup;
           } catch (err) {
             console.error(`Failed to load requests for startup ${s.id}:`, err);

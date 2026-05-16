@@ -81,9 +81,17 @@ export default function StudyGroupsPage() {
 
   useEffect(() => {
     fetch("/api/study-groups")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         setGroups(data.groups || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load study groups:", err);
+        setGroups([]);
         setLoading(false);
       });
   }, []);
@@ -93,19 +101,32 @@ export default function StudyGroupsPage() {
     setMyLoading(true);
     try {
       const res = await fetch("/api/study-groups");
+      if (!res.ok) {
+        console.error("Failed to load my study groups:", res.status);
+        setMyGroups([]);
+        return;
+      }
       const data = await res.json();
       const allGroups: StudyGroup[] = data.groups || [];
 
       // For each group, check if user is a leader and get requests
       const withDetails = await Promise.all(
         allGroups.map(async (g) => {
-          const reqRes = await fetch(`/api/study-groups/${g.id}/join`);
-          const isLeader = reqRes.ok;
-          const pendingRequests = isLeader ? await reqRes.json() : [];
-          return { ...g, isLeader, pendingRequests } as MyGroup;
+          try {
+            const reqRes = await fetch(`/api/study-groups/${g.id}/join`);
+            const isLeader = reqRes.ok;
+            const pendingRequests = isLeader ? await reqRes.json() : [];
+            return { ...g, isLeader, pendingRequests } as MyGroup;
+          } catch (err) {
+            console.error(`Failed to load requests for group ${g.id}:`, err);
+            return { ...g, isLeader: false, pendingRequests: [] } as MyGroup;
+          }
         })
       );
       setMyGroups(withDetails.filter((g) => g.isLeader));
+    } catch (err) {
+      console.error("Error loading my study groups:", err);
+      setMyGroups([]);
     } finally {
       setMyLoading(false);
     }

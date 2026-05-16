@@ -106,9 +106,17 @@ export default function StartupsPage() {
     if (filter === "Validation") params.set("stage", "VALIDATION");
     if (filter === "Building") params.set("stage", "BUILDING");
     fetch(`/api/startups?${params}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         setStartups(data.startups || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load startups:", err);
+        setStartups([]);
         setLoading(false);
       });
   }, [filter]);
@@ -118,16 +126,29 @@ export default function StartupsPage() {
     setMyLoading(true);
     try {
       const res = await fetch("/api/startups?founder=me");
+      if (!res.ok) {
+        console.error("Failed to load my startups:", res.status);
+        setMyStartups([]);
+        return;
+      }
       const data = await res.json();
       const owned: Startup[] = data.startups || [];
       const withRequests = await Promise.all(
         owned.map(async (s) => {
-          const rr = await fetch(`/api/startups/${s.id}/join`);
-          const reqs = rr.ok ? await rr.json() : [];
-          return { ...s, pendingRequests: reqs } as MyStartup;
+          try {
+            const rr = await fetch(`/api/startups/${s.id}/join`);
+            const reqs = rr.ok ? await rr.json() : [];
+            return { ...s, pendingRequests: reqs } as MyStartup;
+          } catch (err) {
+            console.error(`Failed to load requests for startup ${s.id}:`, err);
+            return { ...s, pendingRequests: [] } as MyStartup;
+          }
         })
       );
       setMyStartups(withRequests);
+    } catch (err) {
+      console.error("Error loading my startups:", err);
+      setMyStartups([]);
     } finally {
       setMyLoading(false);
     }

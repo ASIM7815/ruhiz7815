@@ -47,9 +47,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetch("/api/dashboard")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d) => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        console.error("Failed to load dashboard:", err);
+        setLoading(false);
+      });
   }, []);
 
   const stats = [

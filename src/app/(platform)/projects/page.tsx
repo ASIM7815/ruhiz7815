@@ -60,6 +60,7 @@ const statusColors: Record<string, string> = {
   OPEN: "bg-emerald-500/10 text-emerald-600 border-emerald-200",
   IN_PROGRESS: "bg-blue-500/10 text-blue-600 border-blue-200",
   COMPLETED: "bg-gray-500/10 text-gray-600 border-gray-200",
+  ARCHIVED: "bg-slate-500/10 text-slate-600 border-slate-200",
 };
 
 export default function ProjectsPage() {
@@ -80,9 +81,17 @@ export default function ProjectsPage() {
     if (filter === "Open") params.set("status", "OPEN");
     if (filter === "In Progress") params.set("status", "IN_PROGRESS");
     fetch(`/api/projects?${params}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         setProjects(data.projects || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load projects:", err);
+        setProjects([]);
         setLoading(false);
       });
   }, [filter]);
@@ -92,16 +101,29 @@ export default function ProjectsPage() {
     setMyLoading(true);
     try {
       const res = await fetch(`/api/projects?owner=me`);
+      if (!res.ok) {
+        console.error("Failed to load my projects:", res.status);
+        setMyProjects([]);
+        return;
+      }
       const data = await res.json();
       const owned: Project[] = data.projects || [];
       const withRequests = await Promise.all(
         owned.map(async (p) => {
-          const rr = await fetch(`/api/projects/${p.id}/join`);
-          const reqs = rr.ok ? await rr.json() : [];
-          return { ...p, pendingRequests: reqs } as MyProject;
+          try {
+            const rr = await fetch(`/api/projects/${p.id}/join`);
+            const reqs = rr.ok ? await rr.json() : [];
+            return { ...p, pendingRequests: reqs } as MyProject;
+          } catch (err) {
+            console.error(`Failed to load requests for project ${p.id}:`, err);
+            return { ...p, pendingRequests: [] } as MyProject;
+          }
         })
       );
       setMyProjects(withRequests);
+    } catch (err) {
+      console.error("Error loading my projects:", err);
+      setMyProjects([]);
     } finally {
       setMyLoading(false);
     }

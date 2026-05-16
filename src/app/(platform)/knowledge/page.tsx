@@ -96,9 +96,17 @@ export default function KnowledgeHubPage() {
     if (filter === "Papers") params.set("type", "PAPER");
     if (filter === "Materials") params.set("type", "MATERIAL");
     fetch(`/api/resources?${params}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         setResources(data.resources || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load resources:", err);
+        setResources([]);
         setLoading(false);
       });
   }, [filter]);

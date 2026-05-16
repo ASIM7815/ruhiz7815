@@ -2,27 +2,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
+import { canAccessMarketplace, canCreateMarketplaceListing } from "@/lib/services/permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const { user, error } = await requireAuth();
+  if (error || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canAccessMarketplace(user)) {
+    return NextResponse.json({ error: "Marketplace access is not enabled for your account" }, { status: 403 });
+  }
+
   const { searchParams } = req.nextUrl;
   const category = searchParams.get("category");
   const cursor = searchParams.get("cursor");
   const sellerFilter = searchParams.get("seller");
   const take = 12;
 
-  const where: Record<string, unknown> = { sold: false };
+  const where: Record<string, unknown> = { sold: false, status: "ACTIVE" };
   if (category) where.category = category;
 
   if (sellerFilter === "me") {
-    const { user, error, status } = await requireAuth();
-    if (error || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
     where.sellerId = user.id;
     delete where.sold; // Show all own listings including sold
+    delete where.status;
   }
 
   const listings = await db.listing.findMany({
@@ -56,9 +62,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canCreateMarketplaceListing(user)) {
+    return NextResponse.json({ error: "Seller access is not enabled for your account" }, { status: 403 });
   }
 
   const body = await req.json();
@@ -81,6 +90,7 @@ export async function POST(req: NextRequest) {
       condition: condition || null,
       imageUrl: imageUrl || null,
       sellerId: user.id,
+      status: "ACTIVE",
     },
   });
 

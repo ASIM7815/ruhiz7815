@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { db } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -28,6 +29,23 @@ export async function POST(
 
   if (!participant) {
     return NextResponse.json({ error: "Not a member" }, { status: 400 });
+  }
+
+  const { data: conversation } = await supabaseAdmin
+    .from("group_conversations")
+    .select("type, entity_id")
+    .eq("id", id)
+    .single();
+
+  if (conversation?.type === "PROJECT") {
+    const project = await db.project.findUnique({
+      where: { id: conversation.entity_id },
+      select: { ownerId: true },
+    });
+
+    if (project?.ownerId === user.id) {
+      return NextResponse.json({ error: "Project creator cannot leave the project group" }, { status: 400 });
+    }
   }
 
   // If user is the only admin, they can't leave without assigning another admin
@@ -66,6 +84,15 @@ export async function POST(
 
   if (dbError) {
     return NextResponse.json({ error: "Failed to leave" }, { status: 500 });
+  }
+
+  if (conversation?.type === "PROJECT") {
+    await db.projectMember
+      .update({
+        where: { projectId_userId: { projectId: conversation.entity_id, userId: user.id } },
+        data: { status: "LEFT", removedAt: new Date() },
+      })
+      .catch(() => null);
   }
 
   return NextResponse.json({ success: true });

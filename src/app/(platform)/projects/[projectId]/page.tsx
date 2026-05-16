@@ -12,6 +12,9 @@ import {
   CheckCircle2,
   Loader2,
   XCircle,
+  MessageSquare,
+  Inbox,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,7 +60,8 @@ export default function ProjectDetailPage() {
   const userId = user?.id;
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [joinStatus, setJoinStatus] = useState<"none" | "pending" | "member" | "owner">("none");
+  const [joinStatus, setJoinStatus] = useState<"none" | "pending" | "member" | "owner" | "rejected">("none");
+  const [canRequest, setCanRequest] = useState(true);
   const [joinMessage, setJoinMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -67,29 +71,25 @@ export default function ProjectDetailPage() {
       .then((r) => r.json())
       .then((data) => {
         setProject(data);
-        if (userId) {
-          if (data.owner?.id === userId) {
-            setJoinStatus("owner");
-          } else if (data.members?.some((m: { id: string }) => m.id === userId)) {
-            setJoinStatus("member");
-          }
-        }
         setLoading(false);
       });
   }, [projectId, userId]);
 
   useEffect(() => {
-    if (!userId || !projectId || joinStatus !== "none") return;
-    fetch(`/api/projects/${projectId}/join`, { method: "GET" })
-      .then((r) => {
-        if (r.status === 403) {
-          // Not owner, check if we have a pending request by trying to submit a check
-          return null;
-        }
-        return r.json();
+    if (!userId || !projectId) return;
+    fetch(`/api/projects/${projectId}/join/status`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return;
+        if (data.relationship === "OWNER") setJoinStatus("owner");
+        if (data.relationship === "MEMBER") setJoinStatus("member");
+        if (data.relationship === "PENDING") setJoinStatus("pending");
+        if (data.relationship === "REJECTED") setJoinStatus("rejected");
+        if (data.relationship === "NONE") setJoinStatus("none");
+        setCanRequest(!!data.canRequest);
       })
       .catch(() => null);
-  }, [userId, projectId, joinStatus]);
+  }, [userId, projectId]);
 
   const handleJoinRequest = async () => {
     setSubmitting(true);
@@ -105,7 +105,7 @@ export default function ProjectDetailPage() {
       } else {
         const data = await res.json();
         if (data.error?.includes("already pending")) setJoinStatus("pending");
-        if (data.error?.includes("already a member")) setJoinStatus("member");
+        if (data.error?.toLowerCase().includes("already a member")) setJoinStatus("member");
       }
     } finally {
       setSubmitting(false);
@@ -216,8 +216,8 @@ export default function ProjectDetailPage() {
                       <p className="text-xs text-muted-foreground">#{member.uid}</p>
                     )}
                   </div>
-                  <Badge variant={member.role === "LEADER" ? "default" : "secondary"}>
-                    {member.role}
+                  <Badge variant={member.role === "ADMIN" || member.role === "LEADER" ? "default" : "secondary"}>
+                    {member.role === "LEADER" ? "ADMIN" : member.role}
                   </Badge>
                 </div>
               ))}
@@ -230,18 +230,41 @@ export default function ProjectDetailPage() {
           <Card>
             <CardContent className="p-5 space-y-4">
               {joinStatus === "owner" ? (
-                <Button className="w-full" size="lg" variant="outline" disabled>
-                  Your Project
-                </Button>
+                <div className="space-y-2">
+                  <Button className="w-full" size="lg" render={<Link href={`/projects/${project.id}/workspace`} />}>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Open Workspace
+                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" render={<Link href={`/projects/${project.id}/requests`} />}>
+                      <Inbox className="mr-2 h-4 w-4" />
+                      Requests
+                    </Button>
+                    <Button variant="outline" render={<Link href={`/projects/${project.id}/settings`} />}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Settings
+                    </Button>
+                  </div>
+                </div>
               ) : joinStatus === "member" ? (
-                <Button className="w-full" size="lg" variant="outline" disabled>
+                <Button className="w-full" size="lg" render={<Link href={`/projects/${project.id}/workspace`} />}>
                   <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
-                  You&apos;re a Member
+                  Open Workspace
                 </Button>
               ) : joinStatus === "pending" ? (
                 <Button className="w-full" size="lg" variant="outline" disabled>
                   <Clock className="mr-2 h-4 w-4 text-amber-500" />
                   Request Pending
+                </Button>
+              ) : joinStatus === "rejected" && !showForm ? (
+                <Button
+                  className="w-full"
+                  size="lg"
+                  variant="outline"
+                  disabled={!canRequest}
+                  onClick={() => setShowForm(true)}
+                >
+                  Apply Again
                 </Button>
               ) : showForm ? (
                 <div className="space-y-3">
@@ -278,6 +301,7 @@ export default function ProjectDetailPage() {
                 <Button
                   className="w-full"
                   size="lg"
+                  disabled={!canRequest}
                   onClick={() => setShowForm(true)}
                 >
                   Apply to Join

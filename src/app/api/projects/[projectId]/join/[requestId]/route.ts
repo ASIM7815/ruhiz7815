@@ -1,44 +1,45 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase-server";
+import { createNotification } from "@/lib/services/notifications";
+import { isProjectAdminRole } from "@/lib/services/permissions";
+import { addProjectGroupMember } from "@/lib/services/project-groups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// PATCH /api/projects/[projectId]/join/[requestId] — accept or reject
+// PATCH /api/projects/[projectId]/join/[requestId] — approve or reject join request
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ projectId: string; requestId: string }> }
 ) {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { projectId, requestId } = await params;
+  const body = await req.json().catch(() => ({}));
+  const { status } = body;
 
-  // Verify ownership
-  const project = await db.project.findUnique({
-    where: { id: projectId },
-    select: { id: true, ownerId: true, title: true },
-  });
-
-  if (!project || project.ownerId !== user.id) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  if (!["ACCEPTED", "REJECTED"].includes(status)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
-  const body = await req.json();
-  const action = body.action; // "accept" or "reject"
-
-  if (!["accept", "reject"].includes(action)) {
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  }
-
+  // Verify the request exists
   const joinRequest = await db.joinRequest.findUnique({
     where: { id: requestId },
-    select: { id: true, projectId: true, userId: true, status: true },
+    include: {
+      user: { select: { id: true, name: true } },
+      project: {
+        select: {
+          id: true,
+          ownerId: true,
+          title: true,
+          maxMembers: true,
+        },
+      },
+    },
   });
 
   if (!joinRequest || joinRequest.projectId !== projectId) {
@@ -49,61 +50,95 @@ export async function PATCH(
     return NextResponse.json({ error: "Request already processed" }, { status: 400 });
   }
 
-  if (action === "reject") {
-    await db.joinRequest.update({
-      where: { id: requestId },
-      data: { status: "REJECTED" },
-    });
-    return NextResponse.json({ success: true, status: "REJECTED" });
+  // Verify user is project admin
+  const membership = await db.projectMember.findUnique({
+    where: {
+      projectId_userId: { projectId, userId: user.id },
+    },
+    select: { role: true, status: true },
+  });
+
+  const isOwner = joinRequest.project.ownerId === user.id;
+  const isAdmin = membership && membership.status === "ACTIVE" && isProjectAdminRole(membership.role);
+
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  // Accept: add as member + handle group creation
-  await db.$transaction([
-    db.joinRequest.update({
-      where: { id: requestId },
-      data: { status: "ACCEPTED" },
-    }),
-    db.projectMember.create({
-      data: { projectId, userId: joinRequest.userId, role: "MEMBER" },
-    }),
-  ]);
+  // If accepting, check if project is full
+  if (status === "ACCEPTED") {
+    const activeMemberCount = await db.projectMember.count({
+      where: { projectId, status: "ACTIVE" },
+    });
 
-  // Check if a group already exists for this project
-  const { data: existingGroup } = await supabaseAdmin
-    .from("group_conversations")
-    .select("id")
-    .eq("entity_id", projectId)
-    .eq("type", "PROJECT")
-    .single();
+    if (activeMemberCount >= joinRequest.project.maxMembers) {
+      return NextResponse.json({ error: "Project is full" }, { status: 400 });
+    }
 
-  if (existingGroup) {
-    // Add to existing group
-    await supabaseAdmin.from("group_participants").insert({
-      conversation_id: existingGroup.id,
-      user_id: joinRequest.userId,
-      role: "MEMBER",
+    // Add as project member
+    await db.projectMember.upsert({
+      where: {
+        projectId_userId: { projectId, userId: joinRequest.userId },
+      },
+      create: {
+        projectId,
+        userId: joinRequest.userId,
+        role: "MEMBER",
+        status: "ACTIVE",
+      },
+      update: {
+        status: "ACTIVE",
+        role: "MEMBER",
+      },
+    });
+
+    // Add to project group
+    try {
+      await addProjectGroupMember(
+        projectId,
+        joinRequest.userId,
+        "MEMBER",
+        {
+          projectId,
+          name: joinRequest.project.title,
+          creatorId: joinRequest.project.ownerId,
+        }
+      );
+    } catch (groupError) {
+      console.error("[join-request] Failed to add user to group", groupError);
+      // Continue anyway - they're a project member
+    }
+
+    // Notify the requester
+    await createNotification({
+      userId: joinRequest.userId,
+      type: "PROJECT_JOIN_REQUEST_APPROVED",
+      title: "Join request approved",
+      message: `Your request to join "${joinRequest.project.title}" was approved.`,
+      link: `/projects/${projectId}`,
+      actorId: user.id,
+      entityType: "PROJECT",
+      entityId: projectId,
     });
   } else {
-    // Create new group conversation
-    const { data: newGroup } = await supabaseAdmin
-      .from("group_conversations")
-      .insert({
-        name: project.title,
-        type: "PROJECT",
-        entity_id: projectId,
-        created_by: user.id,
-      })
-      .select("id")
-      .single();
-
-    if (newGroup) {
-      // Add owner as admin and accepted user as member
-      await supabaseAdmin.from("group_participants").insert([
-        { conversation_id: newGroup.id, user_id: user.id, role: "ADMIN" },
-        { conversation_id: newGroup.id, user_id: joinRequest.userId, role: "MEMBER" },
-      ]);
-    }
+    // Notify rejection
+    await createNotification({
+      userId: joinRequest.userId,
+      type: "PROJECT_JOIN_REQUEST_REJECTED",
+      title: "Join request declined",
+      message: `Your request to join "${joinRequest.project.title}" was declined.`,
+      link: `/projects`,
+      actorId: user.id,
+      entityType: "PROJECT",
+      entityId: projectId,
+    });
   }
 
-  return NextResponse.json({ success: true, status: "ACCEPTED" });
+  // Update request status
+  await db.joinRequest.update({
+    where: { id: requestId },
+    data: { status },
+  });
+
+  return NextResponse.json({ success: true, status });
 }

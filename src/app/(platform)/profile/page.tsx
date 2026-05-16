@@ -49,8 +49,22 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetch("/api/user/me")
-      .then((r) => r.json())
-      .then(setUser);
+      .then((r) => {
+        if (r.status === 401) {
+          console.error("User not authenticated");
+          window.location.href = "/login";
+          return null;
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        if (data) setUser(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load user profile:", err);
+        setUser(null);
+      });
   }, []);
 
   function copyUid() {

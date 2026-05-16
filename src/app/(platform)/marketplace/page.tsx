@@ -13,6 +13,7 @@ import {
   Loader2,
   Package,
   CheckCircle2,
+  Lock,
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ export default function MarketplacePage() {
   const [myListings, setMyListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [myLoading, setMyLoading] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -91,10 +93,23 @@ export default function MarketplacePage() {
     if (filter === "Books") params.set("category", "BOOK");
     if (filter === "Gadgets") params.set("category", "GADGET");
     if (filter === "Services") params.set("category", "SERVICE");
+    setAccessDenied(false);
     fetch(`/api/marketplace?${params}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 403) {
+          setAccessDenied(true);
+          return { listings: [] };
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         setListings(data.listings || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load marketplace:", err);
+        setListings([]);
         setLoading(false);
       });
   }, [filter]);
@@ -104,6 +119,10 @@ export default function MarketplacePage() {
     setMyLoading(true);
     try {
       const res = await fetch("/api/marketplace?seller=me");
+      if (res.status === 403) {
+        setAccessDenied(true);
+        return;
+      }
       const data = await res.json();
       setMyListings(data.listings || []);
     } finally {
@@ -154,7 +173,8 @@ export default function MarketplacePage() {
       const data = await listRes.json();
       setListings(data.listings || []);
     } else {
-      toast.error("Failed to create listing.");
+      const error = await res.json().catch(() => ({}));
+      toast.error(error.error || "Failed to create listing.");
     }
     setCreating(false);
   }
@@ -206,14 +226,28 @@ export default function MarketplacePage() {
             Buy and sell books, gadgets, and services
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
+        {!accessDenied && <Button onClick={() => setShowCreate(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Sell Something
-        </Button>
+        </Button>}
       </div>
 
+      {accessDenied && (
+        <Card>
+          <CardContent className="p-10 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <Lock className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <h2 className="font-heading text-xl font-semibold">Marketplace Access Restricted</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              Marketplace access is separate from project membership and is not enabled for this account.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+      {!accessDenied && <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
         <button
           onClick={() => setTab("browse")}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -230,9 +264,9 @@ export default function MarketplacePage() {
         >
           My Listings
         </button>
-      </div>
+      </div>}
 
-      {tab === "browse" ? (
+      {!accessDenied ? (tab === "browse" ? (
         <>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -435,7 +469,7 @@ export default function MarketplacePage() {
             ))}
           </div>
         )
-      )}
+      )) : null}
 
       {/* Create Listing Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

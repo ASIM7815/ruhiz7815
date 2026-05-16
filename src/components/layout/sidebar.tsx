@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSupabaseUser, signOut } from "@/hooks/use-supabase-user";
 import {
   ChevronLeft,
@@ -32,6 +32,7 @@ type SidebarNavItemsProps = {
   userImage?: string;
   userInitials: string;
   userName: string;
+  showMarketplace: boolean;
 };
 
 function SidebarNavItems({
@@ -42,7 +43,13 @@ function SidebarNavItems({
   userImage,
   userInitials,
   userName,
+  showMarketplace,
 }: SidebarNavItemsProps) {
+  const mainNav = useMemo(
+    () => platformNav.filter((item) => item.href !== "/marketplace" || showMarketplace),
+    [showMarketplace]
+  );
+
   return (
     <TooltipProvider delay={0}>
       <div className="flex flex-col h-full">
@@ -70,7 +77,7 @@ function SidebarNavItems({
           >
             Main
           </p>
-          {platformNav.map((item) => {
+          {mainNav.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
             const link = (
@@ -191,12 +198,28 @@ export function Sidebar() {
   const userName = user?.user_metadata?.full_name ?? "";
   const userEmail = user?.email ?? "";
   const userImage = user?.user_metadata?.avatar_url ?? undefined;
+  const [showMarketplace, setShowMarketplace] = useState(false);
   const userInitials = userName
     .split(" ")
     .map((n: string) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/user/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const enabled =
+          data?.platformRole === "ADMIN" ||
+          data?.platformRole === "MODERATOR" ||
+          (data?.marketplaceStatus === "ACTIVE" &&
+            ["BUYER", "SELLER", "VERIFIED_SELLER"].includes(data?.marketplaceRole));
+        setShowMarketplace(!!enabled);
+      })
+      .catch(() => setShowMarketplace(false));
+  }, [user]);
 
   return (
     <>
@@ -215,6 +238,7 @@ export function Sidebar() {
             userImage={userImage}
             userInitials={userInitials}
             userName={userName}
+            showMarketplace={showMarketplace}
           />
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -243,6 +267,7 @@ export function Sidebar() {
             userImage={userImage}
             userInitials={userInitials}
             userName={userName}
+            showMarketplace={showMarketplace}
           />
         </SheetContent>
       </Sheet>

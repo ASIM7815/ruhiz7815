@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useRouter } from "next/navigation";
 import { Search, Bell, Sun, Moon } from "lucide-react";
@@ -23,6 +23,7 @@ export function Topbar() {
   } | null>(null);
   const [searching, setSearching] = useState(false);
   const [showResult, setShowResult] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const userImage = user?.user_metadata?.avatar_url ?? undefined;
   const userName = user?.user_metadata?.full_name ?? "";
@@ -32,6 +33,14 @@ export function Topbar() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/notifications?unread=1&limit=1")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setUnreadCount(data?.unreadCount || 0))
+      .catch(() => null);
+  }, [user]);
 
   async function handleSearch(value: string) {
     setSearchUid(value);
@@ -124,9 +133,18 @@ export function Topbar() {
           <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
         </Button>
-        <Button variant="ghost" size="icon" className="relative h-10 w-10">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-10 w-10"
+          onClick={() => router.push("/notifications")}
+        >
           <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
+          {unreadCount > 0 && (
+            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
         </Button>
         <Avatar className="h-8 w-8">
           <AvatarImage src={userImage} />

@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { db } from "@/lib/db";
+import { createNotification } from "@/lib/services/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +13,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -44,6 +46,12 @@ export async function PATCH(
     return NextResponse.json({ error: "No updates" }, { status: 400 });
   }
 
+  const { data: conversation } = await supabaseAdmin
+    .from("group_conversations")
+    .select("type, entity_id, name")
+    .eq("id", id)
+    .single();
+
   const { error: dbError } = await supabaseAdmin
     .from("group_participants")
     .update(updates)
@@ -54,6 +62,26 @@ export async function PATCH(
     return NextResponse.json({ error: "Failed to update" }, { status: 500 });
   }
 
+  if (conversation?.type === "PROJECT" && updates.role) {
+    await db.projectMember
+      .update({
+        where: { projectId_userId: { projectId: conversation.entity_id, userId } },
+        data: { role: updates.role === "ADMIN" ? "ADMIN" : "MEMBER" },
+      })
+      .catch(() => null);
+
+    await createNotification({
+      userId,
+      type: "PROJECT_ROLE_CHANGED",
+      title: "Project role updated",
+      message: `Your role in "${conversation.name}" is now ${updates.role}.`,
+      link: `/projects/${conversation.entity_id}/workspace`,
+      actorId: user.id,
+      entityType: "PROJECT",
+      entityId: conversation.entity_id,
+    });
+  }
+
   return NextResponse.json({ success: true });
 }
 
@@ -62,7 +90,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -86,6 +114,12 @@ export async function DELETE(
     return NextResponse.json({ error: "Cannot remove yourself" }, { status: 400 });
   }
 
+  const { data: conversation } = await supabaseAdmin
+    .from("group_conversations")
+    .select("type, entity_id, name")
+    .eq("id", id)
+    .single();
+
   const { error: dbError } = await supabaseAdmin
     .from("group_participants")
     .delete()
@@ -94,6 +128,26 @@ export async function DELETE(
 
   if (dbError) {
     return NextResponse.json({ error: "Failed to remove" }, { status: 500 });
+  }
+
+  if (conversation?.type === "PROJECT") {
+    await db.projectMember
+      .update({
+        where: { projectId_userId: { projectId: conversation.entity_id, userId } },
+        data: { status: "REMOVED", removedAt: new Date() },
+      })
+      .catch(() => null);
+
+    await createNotification({
+      userId,
+      type: "PROJECT_MEMBER_REMOVED",
+      title: "Removed from project",
+      message: `You were removed from "${conversation.name}".`,
+      link: `/projects/${conversation.entity_id}`,
+      actorId: user.id,
+      entityType: "PROJECT",
+      entityId: conversation.entity_id,
+    });
   }
 
   return NextResponse.json({ success: true });

@@ -1,19 +1,7 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/toast";
-
-const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-heading",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -38,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}>
+    <html lang="en" suppressHydrationWarning className="h-full antialiased">
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
         <Providers>{children}</Providers>
         <Toaster />

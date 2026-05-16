@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
+import { ensureProjectGroup } from "@/lib/services/project-groups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
   if (status) where.status = status;
 
   if (ownerFilter === "me") {
-    const { user, error, status } = await requireAuth();
+    const { user, error } = await requireAuth();
     if (error || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
     include: {
       owner: { select: { id: true, name: true, image: true, university: true, uid: true } },
       skills: { select: { skill: true } },
-      _count: { select: { members: true } },
+      members: { where: { status: "ACTIVE" }, select: { id: true } },
     },
   });
 
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
       status: p.status,
       timeline: p.timeline,
       maxMembers: p.maxMembers,
-      memberCount: p._count.members,
+      memberCount: p.members.length,
       createdAt: p.createdAt.toISOString(),
       skills: p.skills.map((s) => s.skill),
       owner: p.owner,
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -69,25 +70,48 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Title, problem, and description are required" }, { status: 400 });
   }
 
+  const parsedMaxMembers = Math.min(Math.max(Number(maxMembers) || 4, 2), 20);
+  const projectSkills = Array.isArray(skills)
+    ? skills
+        .map((skill) => String(skill).trim())
+        .filter(Boolean)
+        .slice(0, 10)
+    : [];
+
   const project = await db.project.create({
     data: {
-      title,
-      problem,
-      description,
+      title: String(title).trim(),
+      problem: String(problem).trim(),
+      description: String(description).trim(),
       timeline: timeline || null,
-      maxMembers: maxMembers || 4,
+      maxMembers: parsedMaxMembers,
       ownerId: user.id,
       skills: {
-        create: (skills || []).map((skill: string) => ({ skill })),
+        create: projectSkills.map((skill: string) => ({ skill })),
       },
       members: {
         create: {
           userId: user.id,
-          role: "LEADER",
+          role: "ADMIN",
         },
       },
     },
   });
+
+  try {
+    await ensureProjectGroup({
+      projectId: project.id,
+      name: project.title,
+      creatorId: user.id,
+    });
+  } catch (groupError) {
+    await db.project.delete({ where: { id: project.id } }).catch(() => null);
+    console.error("[projects] Failed to create project group", groupError);
+    return NextResponse.json(
+      { error: "Project group could not be created. Please try again." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({ id: project.id }, { status: 201 });
 }

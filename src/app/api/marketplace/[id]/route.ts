@@ -3,10 +3,59 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { deleteFromGCS, extractGCSPath } from "@/lib/gcs";
-import { canCreateMarketplaceListing, isPlatformAdmin } from "@/lib/services/permissions";
+import { canCreateMarketplaceListing, canAccessMarketplace, isPlatformAdmin } from "@/lib/services/permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// GET: Get listing details
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { user, error } = await requireAuth();
+  if (error || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!canAccessMarketplace(user)) {
+    return NextResponse.json({ error: "Marketplace access denied" }, { status: 403 });
+  }
+
+  const { id } = await params;
+
+  const listing = await db.listing.findUnique({
+    where: { id },
+    include: {
+      seller: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          university: true,
+          uid: true,
+        },
+      },
+    },
+  });
+
+  if (!listing) {
+    return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    id: listing.id,
+    title: listing.title,
+    description: listing.description,
+    price: listing.price,
+    category: listing.category,
+    condition: listing.condition,
+    imageUrl: listing.imageUrl,
+    sold: listing.sold,
+    status: listing.status,
+    createdAt: listing.createdAt.toISOString(),
+    seller: listing.seller,
+  });
+}
 
 export async function PATCH(
   req: NextRequest,

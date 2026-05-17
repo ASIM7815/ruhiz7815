@@ -48,6 +48,11 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch("/api/dashboard")
       .then((r) => {
+        if (r.status === 401) {
+          // Redirect to login if unauthorized
+          window.location.href = "/login";
+          return null;
+        }
         if (!r.ok) {
           console.error(`Failed to load dashboard: HTTP ${r.status}`);
           return null;

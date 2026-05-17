@@ -200,7 +200,7 @@ export function validateEnum<T extends string>(
 export const ENUMS = {
   PROJECT_STATUS: ["DRAFT", "OPEN", "IN_PROGRESS", "COMPLETED", "ARCHIVED"] as const,
   PROJECT_VISIBILITY: ["PUBLIC", "PRIVATE", "UNLISTED"] as const,
-  MEMBER_ROLE: ["ADMIN", "MEMBER", "LEADER"] as const,
+  MEMBER_ROLE: ["ADMIN", "MEMBER"] as const,
   MEMBER_STATUS: ["ACTIVE", "REMOVED", "LEFT"] as const,
   JOIN_REQUEST_STATUS: ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED", "EXPIRED"] as const,
   PLATFORM_ROLE: ["USER", "MODERATOR", "ADMIN"] as const,

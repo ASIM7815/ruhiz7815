@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
+import { ensureStartupGroup } from "@/lib/services/startup-groups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,6 +85,18 @@ export async function POST(req: NextRequest) {
       },
     },
   });
+
+  // Create Supabase group for chat
+  try {
+    await ensureStartupGroup({
+      startupId: startup.id,
+      name: startup.name,
+      founderId: user.id,
+    });
+  } catch (error) {
+    console.error("Failed to create startup group:", error);
+    // Don't fail the request if group creation fails
+  }
 
   return NextResponse.json({ id: startup.id }, { status: 201 });
 }

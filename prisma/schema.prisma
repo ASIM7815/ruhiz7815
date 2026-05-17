@@ -50,6 +50,7 @@ model User {
   reports            Report[]       @relation("ReportReporter")
   auditLogs          AuditLog[]
   fileAssets         FileAsset[]
+  reviews            Review[]
 
   @@map("users")
 }
@@ -206,9 +207,25 @@ model Resource {
   authorId    String   @map("author_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  author User @relation(fields: [authorId], references: [id])
+  author  User     @relation(fields: [authorId], references: [id])
+  reviews Review[]
 
   @@map("resources")
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  resourceId String   @map("resource_id")
+  userId     String   @map("user_id")
+  rating     Int      // 1-5
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, userId])
+  @@map("reviews")
 }
 
 model StudyGroup {

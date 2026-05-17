@@ -82,6 +82,10 @@ export default function StudyGroupsPage() {
   useEffect(() => {
     fetch("/api/study-groups")
       .then((r) => {
+        if (r.status === 401) {
+          window.location.href = "/login";
+          return { groups: [] };
+        }
         if (!r.ok) {
           console.error(`Failed to load study groups: HTTP ${r.status}`);
           return { groups: [] };

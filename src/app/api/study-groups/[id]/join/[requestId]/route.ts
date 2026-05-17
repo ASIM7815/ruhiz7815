@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
-import { supabaseAdmin as supabase } from "@/lib/supabase-server";
+import { addStudyGroupGroupMember } from "@/lib/services/study-group-groups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,11 +23,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
-  // Verify leader
+  // Verify admin
   const membership = await db.studyGroupMember.findUnique({
     where: { groupId_userId: { groupId: id, userId: user.id } },
   });
-  if (!membership || membership.role !== "LEADER") {
+  if (!membership || membership.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -44,58 +44,17 @@ export async function PATCH(
   });
 
   if (status === "ACCEPTED") {
-    // Add member
+    // Add member to Prisma
     await db.studyGroupMember.create({
       data: { groupId: id, userId: joinReq.userId },
     });
 
-    // Auto-create or add to Supabase group
-    const group = await db.studyGroup.findUnique({ where: { id } });
-    if (group) {
-      // Check if group conversation exists
-      const { data: existingConv } = await supabase
-        .from("group_conversations")
-        .select("id")
-        .eq("source_type", "study_group")
-        .eq("source_id", id)
-        .single();
-
-      let convId: string;
-
-      if (existingConv) {
-        convId = existingConv.id;
-      } else {
-        // Create group conversation
-        const { data: newConv } = await supabase
-          .from("group_conversations")
-          .insert({
-            name: group.name,
-            created_by: user.id,
-            source_type: "study_group",
-            source_id: id,
-          })
-          .select("id")
-          .single();
-
-        if (!newConv) {
-          return NextResponse.json({ error: "Failed to create group chat" }, { status: 500 });
-        }
-        convId = newConv.id;
-
-        // Add leader as admin
-        await supabase.from("group_participants").insert({
-          conversation_id: convId,
-          user_id: user.id,
-          role: "admin",
-        });
-      }
-
-      // Add accepted user
-      await supabase.from("group_participants").insert({
-        conversation_id: convId,
-        user_id: joinReq.userId,
-        role: "member",
-      });
+    // Add member to Supabase group
+    try {
+      await addStudyGroupGroupMember(id, joinReq.userId);
+    } catch (error) {
+      console.error("Failed to add member to study group group:", error);
+      // Don't fail the request if group member addition fails
     }
   }
 

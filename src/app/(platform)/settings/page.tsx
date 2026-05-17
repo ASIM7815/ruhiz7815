@@ -71,6 +71,11 @@ export default function SettingsPage() {
           window.location.href = "/login";
           return null;
         }
+        if (r.status === 401) {
+          window.location.href = "/login";
+          setLoading(false);
+          return null;
+        }
         if (!r.ok) {
           console.error(`Failed to load settings: HTTP ${r.status}`);
           setLoading(false);

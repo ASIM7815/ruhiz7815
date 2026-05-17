@@ -107,6 +107,10 @@ export default function StartupsPage() {
     if (filter === "Building") params.set("stage", "BUILDING");
     fetch(`/api/startups?${params}`)
       .then((r) => {
+        if (r.status === 401) {
+          window.location.href = "/login";
+          return { startups: [] };
+        }
         if (!r.ok) {
           console.error(`Failed to load startups: HTTP ${r.status}`);
           return { startups: [] };

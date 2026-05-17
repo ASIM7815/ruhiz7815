@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
+import { ensureStudyGroupGroup } from "@/lib/services/study-group-groups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,11 +66,23 @@ export async function POST(req: NextRequest) {
       members: {
         create: {
           userId: user.id,
-          role: "LEADER",
+          role: "ADMIN",
         },
       },
     },
   });
+
+  // Create Supabase group for chat
+  try {
+    await ensureStudyGroupGroup({
+      studyGroupId: group.id,
+      name: group.name,
+      creatorId: user.id,
+    });
+  } catch (error) {
+    console.error("Failed to create study group group:", error);
+    // Don't fail the request if group creation fails
+  }
 
   return NextResponse.json({ id: group.id }, { status: 201 });
 }

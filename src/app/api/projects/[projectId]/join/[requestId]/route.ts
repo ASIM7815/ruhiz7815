@@ -112,9 +112,9 @@ export async function PATCH(
     // Notify the requester
     await createNotification({
       userId: joinRequest.userId,
-      type: "PROJECT_JOIN_REQUEST_APPROVED",
-      title: "Join request approved",
-      message: `Your request to join "${joinRequest.project.title}" was approved.`,
+      type: "PROJECT_JOIN_REQUEST_ACCEPTED",
+      title: "Join request accepted",
+      message: `Your request to join "${joinRequest.project.title}" was accepted.`,
       link: `/projects/${projectId}`,
       actorId: user.id,
       entityType: "PROJECT",

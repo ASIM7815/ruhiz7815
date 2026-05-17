@@ -51,7 +51,6 @@ export default function ProfilePage() {
     fetch("/api/user/me")
       .then((r) => {
         if (r.status === 401) {
-          console.error("User not authenticated");
           window.location.href = "/login";
           return null;
         }

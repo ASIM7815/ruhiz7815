@@ -33,6 +33,7 @@ type SidebarNavItemsProps = {
   userInitials: string;
   userName: string;
   showMarketplace: boolean;
+  unreadMessages: number;
 };
 
 function SidebarNavItems({
@@ -44,10 +45,22 @@ function SidebarNavItems({
   userInitials,
   userName,
   showMarketplace,
+  unreadMessages,
 }: SidebarNavItemsProps) {
   const mainNav = useMemo(
     () => platformNav.filter((item) => item.href !== "/marketplace" || showMarketplace),
     [showMarketplace]
+  );
+
+  // Add unread count to Messages nav item
+  const navWithBadges = useMemo(
+    () =>
+      mainNav.map((item) =>
+        item.href === "/messages" && unreadMessages > 0
+          ? { ...item, badge: unreadMessages }
+          : item
+      ),
+    [mainNav, unreadMessages]
   );
 
   return (
@@ -77,7 +90,7 @@ function SidebarNavItems({
           >
             Main
           </p>
-          {mainNav.map((item) => {
+          {navWithBadges.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
             const link = (
@@ -199,6 +212,7 @@ export function Sidebar() {
   const userEmail = user?.email ?? "";
   const userImage = user?.user_metadata?.avatar_url ?? undefined;
   const [showMarketplace, setShowMarketplace] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const userInitials = userName
     .split(" ")
     .map((n: string) => n[0])
@@ -221,6 +235,29 @@ export function Sidebar() {
       .catch(() => setShowMarketplace(false));
   }, [user]);
 
+  // Fetch unread message count
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await fetch("/api/messages/unread-count");
+        if (res.ok) {
+          const data = await res.json();
+          setUnreadMessages(data.unreadCount);
+        }
+      } catch {
+        // Silently fail
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Poll every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   return (
     <>
       {/* Desktop sidebar */}
@@ -239,6 +276,7 @@ export function Sidebar() {
             userInitials={userInitials}
             userName={userName}
             showMarketplace={showMarketplace}
+            unreadMessages={unreadMessages}
           />
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -268,6 +306,7 @@ export function Sidebar() {
             userInitials={userInitials}
             userName={userName}
             showMarketplace={showMarketplace}
+            unreadMessages={unreadMessages}
           />
         </SheetContent>
       </Sheet>

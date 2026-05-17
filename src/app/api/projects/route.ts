@@ -78,40 +78,46 @@ export async function POST(req: NextRequest) {
         .slice(0, 10)
     : [];
 
-  const project = await db.project.create({
-    data: {
-      title: String(title).trim(),
-      problem: String(problem).trim(),
-      description: String(description).trim(),
-      timeline: timeline || null,
-      maxMembers: parsedMaxMembers,
-      ownerId: user.id,
-      skills: {
-        create: projectSkills.map((skill: string) => ({ skill })),
-      },
-      members: {
-        create: {
-          userId: user.id,
-          role: "ADMIN",
-        },
-      },
-    },
-  });
-
   try {
-    await ensureProjectGroup({
-      projectId: project.id,
-      name: project.title,
-      creatorId: user.id,
+    // Use transaction to ensure project and group are created atomically
+    const project = await db.$transaction(async (tx) => {
+      // Create project with member
+      const newProject = await tx.project.create({
+        data: {
+          title: String(title).trim(),
+          problem: String(problem).trim(),
+          description: String(description).trim(),
+          timeline: timeline || null,
+          maxMembers: parsedMaxMembers,
+          ownerId: user.id,
+          skills: {
+            create: projectSkills.map((skill: string) => ({ skill })),
+          },
+          members: {
+            create: {
+              userId: user.id,
+              role: "ADMIN",
+            },
+          },
+        },
+      });
+
+      // Create group for the project
+      await ensureProjectGroup({
+        projectId: newProject.id,
+        name: newProject.title,
+        creatorId: user.id,
+      });
+
+      return newProject;
     });
-  } catch (groupError) {
-    await db.project.delete({ where: { id: project.id } }).catch(() => null);
-    console.error("[projects] Failed to create project group", groupError);
+
+    return NextResponse.json({ id: project.id }, { status: 201 });
+  } catch (error) {
+    console.error("[projects] Failed to create project with group", error);
     return NextResponse.json(
-      { error: "Project group could not be created. Please try again." },
+      { error: "Project could not be created. Please try again." },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({ id: project.id }, { status: 201 });
 }

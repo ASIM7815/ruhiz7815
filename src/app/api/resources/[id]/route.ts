@@ -7,6 +7,45 @@ import { deleteFromGCS } from "@/lib/gcs";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// GET /api/resources/[id] - Get single resource
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  const resource = await db.resource.findUnique({
+    where: { id },
+    include: {
+      author: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          uid: true,
+        },
+      },
+    },
+  });
+
+  if (!resource) {
+    return NextResponse.json({ error: "Resource not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    id: resource.id,
+    title: resource.title,
+    description: resource.description,
+    type: resource.type,
+    fileUrl: resource.fileUrl,
+    university: resource.university,
+    rating: resource.rating,
+    downloads: resource.downloads,
+    createdAt: resource.createdAt.toISOString(),
+    author: resource.author,
+  });
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

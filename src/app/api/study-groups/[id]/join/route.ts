@@ -73,11 +73,11 @@ export async function GET(
 
   const { id } = await params;
 
-  // Check if user is a leader
+  // Check if user is an admin
   const membership = await db.studyGroupMember.findUnique({
     where: { groupId_userId: { groupId: id, userId: user.id } },
   });
-  if (!membership || membership.role !== "LEADER") {
+  if (!membership || membership.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

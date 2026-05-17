@@ -7,7 +7,7 @@ type PermissionUser = {
 };
 
 export function isProjectAdminRole(role?: string | null) {
-  return role === "ADMIN" || role === "LEADER";
+  return role === "ADMIN";
 }
 
 export function isPlatformAdmin(user?: PermissionUser | null) {

@@ -72,19 +72,27 @@ export default function ProjectsPage() {
   const [myProjects, setMyProjects] = useState<MyProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [myLoading, setMyLoading] = useState(false);
-  const [filter, setFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [skillFilter, setSkillFilter] = useState("");
+  const [timelineFilter, setTimelineFilter] = useState("");
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
-    if (filter === "Open") params.set("status", "OPEN");
-    if (filter === "In Progress") params.set("status", "IN_PROGRESS");
+    if (statusFilter === "Open") params.set("status", "OPEN");
+    if (statusFilter === "In Progress") params.set("status", "IN_PROGRESS");
+    if (statusFilter === "Completed") params.set("status", "COMPLETED");
+    
     fetch(`/api/projects?${params}`)
       .then((r) => {
+        if (r.status === 401) {
+          window.location.href = "/login";
+          return { projects: [] };
+        }
         if (!r.ok) {
           console.error(`Failed to load projects: HTTP ${r.status}`);
-          return { projects: [] }; // Return empty array instead of throwing
+          return { projects: [] };
         }
         return r.json();
       })
@@ -97,7 +105,7 @@ export default function ProjectsPage() {
         setProjects([]);
         setLoading(false);
       });
-  }, [filter]);
+  }, [statusFilter]);
 
   const loadMyProjects = useCallback(async () => {
     if (!userId) return;
@@ -160,13 +168,28 @@ export default function ProjectsPage() {
     }
   };
 
-  const filtered = search
-    ? projects.filter(
-        (p) =>
-          p.title.toLowerCase().includes(search.toLowerCase()) ||
-          p.skills.some((s) => s.toLowerCase().includes(search.toLowerCase()))
-      )
-    : projects;
+  const filtered = projects.filter((p) => {
+    // Search filter
+    const searchLower = search.toLowerCase();
+    const matchesSearch =
+      !search ||
+      p.title.toLowerCase().includes(searchLower) ||
+      p.description.toLowerCase().includes(searchLower) ||
+      p.skills.some((s) => s.toLowerCase().includes(searchLower)) ||
+      p.owner.name.toLowerCase().includes(searchLower);
+
+    // Skill filter
+    const matchesSkill =
+      !skillFilter ||
+      p.skills.some((s) => s.toLowerCase().includes(skillFilter.toLowerCase()));
+
+    // Timeline filter
+    const matchesTimeline =
+      !timelineFilter ||
+      (p.timeline && p.timeline.toLowerCase().includes(timelineFilter.toLowerCase()));
+
+    return matchesSearch && matchesSkill && matchesTimeline;
+  });
 
   const totalPending = myProjects.reduce((s, p) => s + p.pendingRequests.length, 0);
 
@@ -216,27 +239,62 @@ export default function ProjectsPage() {
       {tab === "browse" ? (
         <>
           {/* Search and Filters */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search projects by title or skill..."
-                className="pl-10"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by title, description, skill, or owner..."
+                  className="pl-10"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="flex gap-2">
-              {["All", "Open", "In Progress"].map((f) => (
-                <Badge
-                  key={f}
-                  variant={filter === f ? "default" : "outline"}
-                  className="cursor-pointer hover:bg-primary/10 px-4 py-1.5"
-                  onClick={() => setFilter(f)}
+
+            {/* Filter Pills */}
+            <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Status:</span>
+                {["All", "Open", "In Progress", "Completed"].map((f) => (
+                  <Badge
+                    key={f}
+                    variant={statusFilter === f ? "default" : "outline"}
+                    className="cursor-pointer hover:bg-primary/10 px-3 py-1"
+                    onClick={() => setStatusFilter(f)}
+                  >
+                    {f}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            {/* Advanced Filters */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                placeholder="Filter by skill (e.g., React, Python)..."
+                className="sm:max-w-xs"
+                value={skillFilter}
+                onChange={(e) => setSkillFilter(e.target.value)}
+              />
+              <Input
+                placeholder="Filter by timeline (e.g., 3 months)..."
+                className="sm:max-w-xs"
+                value={timelineFilter}
+                onChange={(e) => setTimelineFilter(e.target.value)}
+              />
+              {(skillFilter || timelineFilter) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSkillFilter("");
+                    setTimelineFilter("");
+                  }}
                 >
-                  {f}
-                </Badge>
-              ))}
+                  Clear Filters
+                </Button>
+              )}
             </div>
           </div>
 

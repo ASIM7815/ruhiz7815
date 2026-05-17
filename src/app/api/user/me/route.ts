@@ -86,7 +86,7 @@ export async function PATCH(req: NextRequest) {
     if (name !== undefined) data.name = name;
     if (bio !== undefined) data.bio = bio;
     if (university !== undefined) data.university = university;
-    if (role !== undefined && ["MEMBER", "LEADER", "BOTH"].includes(role)) data.role = role;
+    if (role !== undefined && ["MEMBER", "ADMIN"].includes(role)) data.role = role;
     if (onboardingComplete !== undefined) data.onboardingComplete = onboardingComplete;
 
     const user = await db.user.update({

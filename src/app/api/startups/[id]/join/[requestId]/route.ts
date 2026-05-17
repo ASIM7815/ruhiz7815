@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
-import { supabaseAdmin as supabase } from "@/lib/supabase-server";
+import { addStartupGroupMember } from "@/lib/services/startup-groups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,51 +40,18 @@ export async function PATCH(
   });
 
   if (status === "ACCEPTED") {
+    // Add member to Prisma
     await db.startupMember.create({
       data: { startupId: id, userId: joinReq.userId, role: "MEMBER" },
     });
 
-    // Auto-create or add to Supabase group
-    const { data: existingConv } = await supabase
-      .from("group_conversations")
-      .select("id")
-      .eq("source_type", "startup")
-      .eq("source_id", id)
-      .single();
-
-    let convId: string;
-
-    if (existingConv) {
-      convId = existingConv.id;
-    } else {
-      const { data: newConv } = await supabase
-        .from("group_conversations")
-        .insert({
-          name: startup.name,
-          created_by: user.id,
-          source_type: "startup",
-          source_id: id,
-        })
-        .select("id")
-        .single();
-
-      if (!newConv) {
-        return NextResponse.json({ error: "Failed to create group chat" }, { status: 500 });
-      }
-      convId = newConv.id;
-
-      await supabase.from("group_participants").insert({
-        conversation_id: convId,
-        user_id: user.id,
-        role: "admin",
-      });
+    // Add member to Supabase group
+    try {
+      await addStartupGroupMember(id, joinReq.userId);
+    } catch (error) {
+      console.error("Failed to add member to startup group:", error);
+      // Don't fail the request if group member addition fails
     }
-
-    await supabase.from("group_participants").insert({
-      conversation_id: convId,
-      user_id: joinReq.userId,
-      role: "member",
-    });
   }
 
   return NextResponse.json({ success: true });

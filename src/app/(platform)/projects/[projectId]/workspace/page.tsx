@@ -6,12 +6,15 @@ import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   CheckSquare,
+  Download,
   FileText,
   Loader2,
   MessageSquare,
   Plus,
   Settings,
   Shield,
+  Trash2,
+  Upload,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +55,20 @@ type Task = {
   assigneeId: string | null;
 };
 
+type ProjectFile = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+  uploadedBy: {
+    id: string;
+    name: string;
+    image: string | null;
+  };
+};
+
 const taskColumns = [
   { value: "TODO", label: "To do" },
   { value: "IN_PROGRESS", label: "In progress" },
@@ -72,9 +89,12 @@ export default function WorkspacePage() {
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [group, setGroup] = useState<ProjectGroup | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [files, setFiles] = useState<ProjectFile[]>([]);
   const [newTask, setNewTask] = useState("");
   const [loading, setLoading] = useState(true);
   const [taskSaving, setTaskSaving] = useState(false);
+  const [fileUploading, setFileUploading] = useState(false);
+  const [fileDeleting, setFileDeleting] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const loadWorkspace = useCallback(async () => {
@@ -82,10 +102,11 @@ export default function WorkspacePage() {
     setError("");
 
     try {
-      const [projectRes, groupRes, tasksRes] = await Promise.all([
+      const [projectRes, groupRes, tasksRes, filesRes] = await Promise.all([
         fetch(`/api/projects/${projectId}`),
         fetch(`/api/projects/${projectId}/group`),
         fetch(`/api/projects/${projectId}/tasks`),
+        fetch(`/api/projects/${projectId}/files`),
       ]);
 
       if (groupRes.status === 403) {
@@ -104,6 +125,11 @@ export default function WorkspacePage() {
       if (tasksRes.ok) {
         const taskData = await tasksRes.json();
         setTasks(taskData.tasks || []);
+      }
+
+      if (filesRes.ok) {
+        const fileData = await filesRes.json();
+        setFiles(fileData.files || []);
       }
     } finally {
       setLoading(false);
@@ -150,6 +176,78 @@ export default function WorkspacePage() {
     });
 
     if (!res.ok) setTasks(previous);
+  }
+
+  async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || fileUploading) return;
+
+    // Validate file size (50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      alert("File too large. Maximum size is 50MB.");
+      return;
+    }
+
+    setFileUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`/api/projects/${projectId}/files`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setFiles((prev) => [data.file, ...prev]);
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to upload file");
+      }
+    } finally {
+      setFileUploading(false);
+      // Reset input
+      event.target.value = "";
+    }
+  }
+
+  async function deleteFile(fileId: string) {
+    if (!confirm("Delete this file? This cannot be undone.")) return;
+
+    setFileDeleting(fileId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/files/${fileId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setFiles((prev) => prev.filter((f) => f.id !== fileId));
+      } else {
+        const error = await res.json();
+        alert(error.error || "Failed to delete file");
+      }
+    } finally {
+      setFileDeleting(null);
+    }
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function getFileIcon(mimeType: string) {
+    if (mimeType.startsWith("image/")) return "🖼️";
+    if (mimeType.startsWith("video/")) return "🎥";
+    if (mimeType.startsWith("audio/")) return "🎵";
+    if (mimeType.includes("pdf")) return "📄";
+    if (mimeType.includes("word") || mimeType.includes("document")) return "📝";
+    if (mimeType.includes("sheet") || mimeType.includes("excel")) return "📊";
+    if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "📽️";
+    if (mimeType.includes("zip") || mimeType.includes("rar") || mimeType.includes("tar")) return "📦";
+    return "📎";
   }
 
   if (loading) {
@@ -293,11 +391,86 @@ export default function WorkspacePage() {
 
         <TabsContent value="files">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Shared Files</CardTitle>
+              <div className="relative">
+                <input
+                  type="file"
+                  id="file-upload"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  disabled={fileUploading}
+                />
+                <Button
+                  size="sm"
+                  onClick={() => document.getElementById("file-upload")?.click()}
+                  disabled={fileUploading}
+                >
+                  {fileUploading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="mr-2 h-4 w-4" />
+                  )}
+                  Upload File
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <p className="py-8 text-center text-sm text-muted-foreground">No shared files yet.</p>
+              {files.length === 0 ? (
+                <div className="py-12 text-center">
+                  <FileText className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                  <p className="mt-4 text-sm text-muted-foreground">No shared files yet.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Upload files to share with your team
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {files.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="text-2xl">{getFileIcon(file.mimeType)}</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{file.fileName}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{formatFileSize(file.fileSize)}</span>
+                          <span>•</span>
+                          <span>
+                            {file.uploadedBy.name} •{" "}
+                            {new Date(file.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          render={<a href={file.fileUrl} target="_blank" rel="noopener noreferrer" />}
+                          title="Download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => deleteFile(file.id)}
+                          disabled={fileDeleting === file.id}
+                          className="text-destructive hover:text-destructive"
+                          title="Delete"
+                        >
+                          {fileDeleting === file.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

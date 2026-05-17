@@ -49,7 +49,7 @@ export async function PATCH(
   const body = await req.json();
   const newRole = String(body.role || "").toUpperCase();
 
-  if (!["ADMIN", "MEMBER", "LEADER"].includes(newRole)) {
+  if (!["ADMIN", "MEMBER"].includes(newRole)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Search,
   Upload,
@@ -97,6 +98,10 @@ export default function KnowledgeHubPage() {
     if (filter === "Materials") params.set("type", "MATERIAL");
     fetch(`/api/resources?${params}`)
       .then((r) => {
+        if (r.status === 401) {
+          window.location.href = "/login";
+          return { resources: [] };
+        }
         if (!r.ok) {
           console.error(`Failed to load resources: HTTP ${r.status}`);
           return { resources: [] };
@@ -333,12 +338,14 @@ export default function KnowledgeHubPage() {
                     </Badge>
                     <div className="flex items-center gap-1 text-sm">
                       <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                      <span className="font-medium">{resource.rating}</span>
+                      <span className="font-medium">{resource.rating.toFixed(1)}</span>
                     </div>
                   </div>
-                  <h3 className="font-heading text-base font-semibold mt-2 group-hover:text-primary transition-colors line-clamp-2">
-                    {resource.title}
-                  </h3>
+                  <Link href={`/knowledge/${resource.id}`}>
+                    <h3 className="font-heading text-base font-semibold mt-2 group-hover:text-primary transition-colors line-clamp-2 cursor-pointer">
+                      {resource.title}
+                    </h3>
+                  </Link>
                 </CardHeader>
                 <CardContent className="pb-3">
                   {resource.university && (

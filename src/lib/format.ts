@@ -128,7 +128,6 @@ export function getStatusColor(status: string): string {
     // Join request status
     PENDING: "yellow",
     ACCEPTED: "green",
-    APPROVED: "green",
     REJECTED: "red",
     CANCELLED: "gray",
     

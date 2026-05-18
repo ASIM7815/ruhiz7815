@@ -496,10 +496,10 @@ function MessagesPageContent() {
         screenSharing={call.screenSharing}
       />
 
-      <div className="flex h-[calc(100dvh-4rem)] overflow-hidden -m-3 sm:-m-4 lg:-m-6">
-        {/* Sidebar */}
+      <div className="flex h-[calc(100dvh-4rem)] overflow-hidden -m-3 sm:-m-4 lg:-m-6 safe-area-inset-bottom">
+        {/* Sidebar - Hidden on mobile when chat is open */}
         <div
-          className={`w-full md:w-80 lg:w-96 ${
+          className={`w-full md:w-80 lg:w-96 flex-shrink-0 ${
             showMobileChat ? "hidden md:flex" : "flex"
           }`}
         >
@@ -522,13 +522,13 @@ function MessagesPageContent() {
           />
         </div>
 
-        {/* Chat Area */}
+        {/* Chat Area - Full screen on mobile */}
         <div
-          className={`flex-1 ${showMobileChat ? "flex" : "hidden md:flex"}`}
+          className={`flex-1 min-w-0 ${showMobileChat ? "flex" : "hidden md:flex"}`}
         >
           {msgTab === "groups" && selectedGroupId ? (
-            <div className="flex-1 flex flex-col">
-              <div className="md:hidden p-2 border-b">
+            <div className="flex-1 flex flex-col min-w-0">
+              <div className="md:hidden p-2 border-b safe-area-inset-top">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -536,11 +536,12 @@ function MessagesPageContent() {
                     setSelectedGroupId(null);
                     setShowMobileChat(false);
                   }}
+                  className="touch-manipulation active:scale-95 transition-transform"
                 >
                   <ArrowLeft className="h-4 w-4 mr-2" /> Back
                 </Button>
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <GroupChat groupId={selectedGroupId} />
               </div>
             </div>

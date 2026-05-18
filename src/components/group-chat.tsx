@@ -327,23 +327,33 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="flex items-center gap-3 p-4 border-b bg-card/50 backdrop-blur-sm">
+      <div className="flex flex-col h-full bg-background">
+        {/* Header - Mobile optimized */}
+        <div className="flex items-center gap-2 sm:gap-3 px-3 py-2.5 sm:px-4 sm:py-3 border-b bg-card/50 backdrop-blur-md safe-area-inset-top">
           {onBack && (
-            <Button variant="ghost" size="sm" onClick={onBack}>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={onBack}
+              className="touch-manipulation active:scale-95 transition-transform"
+            >
               ←
             </Button>
           )}
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold truncate">{group?.name || "Group"}</h3>
+            <h3 className="font-semibold truncate text-sm sm:text-base">{group?.name || "Group"}</h3>
             <p className="text-xs text-muted-foreground">{memberCount} members</p>
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-0.5 sm:gap-1">
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => alert("Group audio calls coming soon!")}>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 touch-manipulation active:scale-95 transition-transform" 
+                    onClick={() => alert("Group audio calls coming soon!")}
+                  >
                     <Phone className="h-4 w-4" />
                   </Button>
                 }
@@ -353,7 +363,12 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => alert("Group video calls coming soon!")}>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 touch-manipulation active:scale-95 transition-transform" 
+                    onClick={() => alert("Group video calls coming soon!")}
+                  >
                     <Video className="h-4 w-4" />
                   </Button>
                 }
@@ -363,22 +378,26 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
             <Dialog open={showMembers} onOpenChange={setShowMembers}>
               <DialogTrigger
                 render={
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-9 w-9 touch-manipulation active:scale-95 transition-transform"
+                  >
                     <Users className="h-4 w-4" />
                   </Button>
                 }
               />
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md mx-4">
                 <DialogHeader>
                   <DialogTitle>Group Members</DialogTitle>
                   <DialogDescription>{memberCount} members</DialogDescription>
               </DialogHeader>
               {isAdmin ? (
-                <ScrollArea className="max-h-80">
+                <ScrollArea className="max-h-80 overscroll-contain">
                   <div className="space-y-2">
                     {members.map((m) => (
-                      <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
-                        <Avatar className="h-8 w-8">
+                      <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 active:bg-muted/70 transition-colors">
+                        <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
                           <AvatarImage src={m.user?.image || undefined} />
                           <AvatarFallback>{m.user?.name?.charAt(0) || "?"}</AvatarFallback>
                         </Avatar>
@@ -393,19 +412,43 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                         {isAdmin && m.user_id !== user?.id && (
                           <div className="flex gap-1">
                             {m.role === "MEMBER" ? (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMakeAdmin(m.user_id)} title="Make Admin">
-                                <Shield className="h-3.5 w-3.5" />
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 touch-manipulation active:scale-95 transition-transform" 
+                                onClick={() => handleMakeAdmin(m.user_id)} 
+                                title="Make Admin"
+                              >
+                                <Shield className="h-4 w-4" />
                               </Button>
                             ) : (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveAdmin(m.user_id)} title="Remove Admin">
-                                <ShieldOff className="h-3.5 w-3.5" />
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 touch-manipulation active:scale-95 transition-transform" 
+                                onClick={() => handleRemoveAdmin(m.user_id)} 
+                                title="Remove Admin"
+                              >
+                                <ShieldOff className="h-4 w-4" />
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleToggleMedia(m.user_id, m.can_share_media)} title={m.can_share_media ? "Disable media" : "Enable media"}>
-                              {m.can_share_media ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 touch-manipulation active:scale-95 transition-transform" 
+                              onClick={() => handleToggleMedia(m.user_id, m.can_share_media)} 
+                              title={m.can_share_media ? "Disable media" : "Enable media"}
+                            >
+                              {m.can_share_media ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveMember(m.user_id)} title="Remove">
-                              <UserX className="h-3.5 w-3.5" />
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-destructive touch-manipulation active:scale-95 transition-transform" 
+                              onClick={() => handleRemoveMember(m.user_id)} 
+                              title="Remove"
+                            >
+                              <UserX className="h-4 w-4" />
                             </Button>
                           </div>
                         )}
@@ -420,32 +463,38 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
               )}
             </DialogContent>
           </Dialog>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={handleLeaveGroup} title="Leave group">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-9 w-9 text-destructive touch-manipulation active:scale-95 transition-transform" 
+            onClick={handleLeaveGroup} 
+            title="Leave group"
+          >
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
-      </div>
+        </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-3">
+        {/* Messages - Mobile optimized scrolling */}
+        <ScrollArea className="flex-1 p-3 sm:p-4 overscroll-contain" ref={scrollRef}>
+        <div className="space-y-2 sm:space-y-3">
           {messages.map((msg) => {
             const isMe = msg.sender_id === user?.id;
             return (
               <div key={msg.id} className={cn("flex gap-2 group", isMe ? "flex-row-reverse" : "flex-row")}>
                 {!isMe && (
-                  <Avatar className="h-7 w-7 mt-1">
+                  <Avatar className="h-7 w-7 sm:h-8 sm:w-8 mt-1 flex-shrink-0">
                     <AvatarImage src={getSenderImage(msg.sender_id) || undefined} />
                     <AvatarFallback className="text-[10px]">{getSenderName(msg.sender_id).charAt(0)}</AvatarFallback>
                   </Avatar>
                 )}
-                <div className={cn("max-w-[70%] space-y-0.5", isMe ? "items-end" : "items-start")}>
+                <div className={cn("max-w-[85%] sm:max-w-[75%] md:max-w-[70%] space-y-0.5", isMe ? "items-end" : "items-start")}>
                   {!isMe && (
                     <p className="text-[10px] text-muted-foreground px-1">{getSenderName(msg.sender_id)}</p>
                   )}
                   <div
                     className={cn(
-                      "rounded-2xl px-3 py-2 text-sm",
+                      "rounded-2xl px-3 py-2 text-sm sm:text-base",
                       isMe
                         ? "bg-primary text-primary-foreground rounded-tr-sm"
                         : "bg-muted rounded-tl-sm"
@@ -457,7 +506,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                         alt={msg.content || "Image"}
                         width={320}
                         height={240}
-                        className="mb-1 h-auto max-h-60 w-auto max-w-full rounded-lg object-contain"
+                        className="mb-1 h-auto max-h-60 w-auto max-w-full rounded-lg object-contain touch-manipulation"
                       />
                     )}
                     {msg.message_type === "PDF" && msg.file_url && (
@@ -465,7 +514,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                         href={msg.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 underline"
+                        className="flex items-center gap-2 underline touch-manipulation active:scale-95 transition-transform"
                       >
                         <FileText className="h-4 w-4" />
                         {msg.content || "Document"}
@@ -485,7 +534,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                             value={editContent}
                             onChange={(e) => setEditContent(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") {
+                              if (e.key === "Enter" && window.innerWidth >= 768) {
                                 e.preventDefault();
                                 handleEditMessage(msg.id);
                               } else if (e.key === "Escape") {
@@ -493,24 +542,31 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                               }
                             }}
                             className={cn(
-                              "h-7 text-xs border-0 w-full min-w-[150px]",
+                              "h-8 text-sm border-0 w-full min-w-[150px] touch-manipulation",
                               isMe ? "bg-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/50" : "bg-background"
                             )}
+                            style={{ fontSize: "16px" }}
                           />
-                          <button onClick={() => handleEditMessage(msg.id)} className="shrink-0 hover:opacity-70">
-                            <Check className="h-3.5 w-3.5" />
+                          <button 
+                            onClick={() => handleEditMessage(msg.id)} 
+                            className="shrink-0 hover:opacity-70 active:scale-95 transition-transform touch-manipulation p-1"
+                          >
+                            <Check className="h-4 w-4" />
                           </button>
-                          <button onClick={() => setEditingMessageId(null)} className="shrink-0 hover:opacity-70">
-                            <X className="h-3.5 w-3.5" />
+                          <button 
+                            onClick={() => setEditingMessageId(null)} 
+                            className="shrink-0 hover:opacity-70 active:scale-95 transition-transform touch-manipulation p-1"
+                          >
+                            <X className="h-4 w-4" />
                           </button>
                         </div>
                       ) : (
-                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                        <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>
                       )
                     )}
                   </div>
                   <div className={cn("flex items-center gap-2", isMe ? "justify-end" : "justify-start")}>
-                    <p className="text-[9px] text-muted-foreground px-1">
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground px-1">
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </p>
                     {isMe && msg.message_type === "TEXT" && editingMessageId !== msg.id && (
@@ -519,19 +575,19 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                           setEditingMessageId(msg.id);
                           setEditContent(msg.content || "");
                         }}
-                        className="text-[9px] text-muted-foreground/50 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="text-[9px] text-muted-foreground/50 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity touch-manipulation p-1"
                         title="Edit message"
                       >
-                        <Pencil className="h-3 w-3" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </button>
                     )}
                     {(isMe || isAdmin) && (
                       <button 
                         onClick={() => handleDeleteMessage(msg.id)}
-                        className="text-[9px] text-muted-foreground/50 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="text-[9px] text-muted-foreground/50 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity touch-manipulation p-1"
                         title="Delete message"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
@@ -541,16 +597,16 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
           })}
           <div ref={messagesEndRef} />
         </div>
-      </ScrollArea>
+        </ScrollArea>
 
-      {/* Input */}
-      <div className="p-3 border-t bg-card/50 backdrop-blur-sm">
+        {/* Input - Mobile optimized */}
+        <div className="p-2 sm:p-3 border-t bg-card/50 backdrop-blur-md safe-area-inset-bottom">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSend();
           }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-1.5 sm:gap-2"
         >
           <input
             type="file"
@@ -560,22 +616,34 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
             onChange={handleFileUpload}
           />
           {(isAdmin || group?.canShareMedia) && (
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => fileInputRef.current?.click()}>
-              <ImageIcon className="h-4 w-4" />
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 touch-manipulation active:scale-95 transition-transform" 
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <ImageIcon className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           )}
           <Input
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 h-9 bg-muted/50 border-0"
+            className="flex-1 h-10 bg-muted/50 border-0 text-base touch-manipulation"
+            style={{ fontSize: "16px" }}
           />
-          <Button type="submit" size="icon" className="h-8 w-8 shrink-0" disabled={!newMessage.trim() || sending}>
-            <Send className="h-4 w-4" />
+          <Button 
+            type="submit" 
+            size="icon" 
+            className="h-10 w-10 shrink-0 touch-manipulation active:scale-95 transition-transform" 
+            disabled={!newMessage.trim() || sending}
+          >
+            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
         </form>
       </div>
-    </div>
+      </div>
     </TooltipProvider>
   );
 }

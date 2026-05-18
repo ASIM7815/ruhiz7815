@@ -57,7 +57,7 @@ export function MessageList({
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm px-4 text-center">
         No messages yet. Start the conversation!
       </div>
     );
@@ -65,10 +65,15 @@ export function MessageList({
 
   return (
     <div className="flex-1 relative flex flex-col overflow-hidden">
-      {/* Scrollable Messages Area */}
+      {/* Scrollable Messages Area - Mobile optimized */}
       <div
         ref={scrollAreaRef}
-        className="flex-1 overflow-y-auto px-4 py-3 scroll-smooth"
+        className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 scroll-smooth overscroll-contain"
+        style={{
+          // Optimize scrolling performance on mobile
+          WebkitOverflowScrolling: 'touch',
+          scrollBehavior: 'smooth',
+        }}
       >
         <div className="space-y-1">
           {groupedMessages.map((msg) => (
@@ -102,7 +107,7 @@ export function MessageList({
         </div>
       </div>
 
-      {/* Scroll to Bottom Button */}
+      {/* Scroll to Bottom Button - Mobile optimized */}
       <ScrollToBottomButton
         onClick={() => scrollToBottom(true)}
         unreadCount={unreadCount}

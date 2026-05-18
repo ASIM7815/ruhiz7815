@@ -29,8 +29,20 @@ import {
   UserX,
   Lock,
   Unlock,
+  Phone,
+  Video,
+  Trash2,
+  Pencil,
+  X,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface GroupMessage {
   id: string;
@@ -73,6 +85,8 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   const [showMembers, setShowMembers] = useState(false);
   const [sending, setSending] = useState(false);
   const [userNames, setUserNames] = useState<Record<string, { name: string; image: string | null }>>({});
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -250,6 +264,56 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
     );
   }
 
+  async function handleDeleteMessage(messageId: string) {
+    if (!confirm("Are you sure you want to delete this message?")) return;
+    
+    // Optimistic update
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    
+    try {
+      const res = await fetch(`/api/groups/${groupId}/messages/${messageId}`, {
+        method: "DELETE",
+      });
+      
+      if (!res.ok) {
+        // Revert on failure (we would need to fetch messages again to truly revert, but this is simple)
+        const refresh = await fetch(`/api/groups/${groupId}/messages`);
+        if (refresh.ok) {
+          const data = await refresh.json();
+          setMessages(data.messages || []);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to delete message", e);
+    }
+  }
+
+  async function handleEditMessage(messageId: string) {
+    if (!editContent.trim()) return;
+    const previous = messages;
+    
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, content: editContent.trim() } : m))
+    );
+    setEditingMessageId(null);
+    setEditContent("");
+
+    try {
+      const res = await fetch(`/api/groups/${groupId}/messages/${messageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent.trim() }),
+      });
+      
+      if (!res.ok) {
+        setMessages(previous);
+      }
+    } catch (e) {
+      console.error("Failed to edit message", e);
+      setMessages(previous);
+    }
+  }
+
   function getSenderName(senderId: string) {
     if (senderId === user?.id) return "You";
     return userNames[senderId]?.name || "Unknown";
@@ -262,27 +326,46 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   const isAdmin = group?.myRole === "ADMIN";
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b bg-card/50 backdrop-blur-sm">
-        {onBack && (
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            ←
-          </Button>
-        )}
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold truncate">{group?.name || "Group"}</h3>
-          <p className="text-xs text-muted-foreground">{memberCount} members</p>
-        </div>
-        <div className="flex gap-1">
-          <Dialog open={showMembers} onOpenChange={setShowMembers}>
-            <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
-              <Users className="h-4 w-4" />
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Group Members</DialogTitle>
-                <DialogDescription>{memberCount} members</DialogDescription>
+    <TooltipProvider>
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center gap-3 p-4 border-b bg-card/50 backdrop-blur-sm">
+          {onBack && (
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              ←
+            </Button>
+          )}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold truncate">{group?.name || "Group"}</h3>
+            <p className="text-xs text-muted-foreground">{memberCount} members</p>
+          </div>
+          <div className="flex gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => alert("Group audio calls coming soon!")}>
+                  <Phone className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Start audio call</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => alert("Group video calls coming soon!")}>
+                  <Video className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Start video call</TooltipContent>
+            </Tooltip>
+            <Dialog open={showMembers} onOpenChange={setShowMembers}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Users className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Group Members</DialogTitle>
+                  <DialogDescription>{memberCount} members</DialogDescription>
               </DialogHeader>
               {isAdmin ? (
                 <ScrollArea className="max-h-80">
@@ -343,7 +426,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
           {messages.map((msg) => {
             const isMe = msg.sender_id === user?.id;
             return (
-              <div key={msg.id} className={cn("flex gap-2", isMe ? "flex-row-reverse" : "flex-row")}>
+              <div key={msg.id} className={cn("flex gap-2 group", isMe ? "flex-row-reverse" : "flex-row")}>
                 {!isMe && (
                   <Avatar className="h-7 w-7 mt-1">
                     <AvatarImage src={getSenderImage(msg.sender_id) || undefined} />
@@ -388,11 +471,64 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                         {msg.content}
                       </div>
                     )}
-                    {msg.message_type === "TEXT" && <p>{msg.content}</p>}
+                    {msg.message_type === "TEXT" && (
+                      editingMessageId === msg.id ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            autoFocus
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleEditMessage(msg.id);
+                              } else if (e.key === "Escape") {
+                                setEditingMessageId(null);
+                              }
+                            }}
+                            className={cn(
+                              "h-7 text-xs border-0 w-full min-w-[150px]",
+                              isMe ? "bg-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/50" : "bg-background"
+                            )}
+                          />
+                          <button onClick={() => handleEditMessage(msg.id)} className="shrink-0 hover:opacity-70">
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => setEditingMessageId(null)} className="shrink-0 hover:opacity-70">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      )
+                    )}
                   </div>
-                  <p className="text-[9px] text-muted-foreground px-1">
-                    {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </p>
+                  <div className={cn("flex items-center gap-2", isMe ? "justify-end" : "justify-start")}>
+                    <p className="text-[9px] text-muted-foreground px-1">
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    {isMe && msg.message_type === "TEXT" && editingMessageId !== msg.id && (
+                      <button 
+                        onClick={() => {
+                          setEditingMessageId(msg.id);
+                          setEditContent(msg.content || "");
+                        }}
+                        className="text-[9px] text-muted-foreground/50 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Edit message"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    )}
+                    {(isMe || isAdmin) && (
+                      <button 
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        className="text-[9px] text-muted-foreground/50 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete message"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -434,5 +570,6 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
         </form>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

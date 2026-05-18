@@ -45,6 +45,7 @@ export default function ProjectSettingsPage() {
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [groupDetails, setGroupDetails] = useState<{ id: string } | null>(null);
 
   const loadProject = useCallback(async () => {
     setLoading(true);
@@ -64,6 +65,7 @@ export default function ProjectSettingsPage() {
         setError("Only project admins can edit project settings.");
         return;
       }
+      setGroupDetails(group);
 
       if (projectRes.ok) {
         const data = await projectRes.json();
@@ -391,6 +393,35 @@ export default function ProjectSettingsPage() {
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-destructive/50 p-4">
+            <div>
+              <p className="font-medium text-destructive">Clear Group Chat</p>
+              <p className="text-sm text-muted-foreground">
+                Permanently delete all messages in the project group chat.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!confirm("Are you sure you want to delete all messages in the group chat? This cannot be undone.")) return;
+                if (!groupDetails) return;
+                try {
+                  const res = await fetch(`/api/groups/${groupDetails.id}/messages`, { method: "DELETE" });
+                  if (res.ok) {
+                    toast.success("Group chat history cleared.");
+                  } else {
+                    toast.error("Failed to clear group chat.");
+                  }
+                } catch (e) {
+                  toast.error("An error occurred.");
+                }
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Clear Chat
             </Button>
           </div>
         </CardContent>

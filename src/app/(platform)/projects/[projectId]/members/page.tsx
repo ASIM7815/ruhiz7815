@@ -3,11 +3,20 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Loader2, Shield, ShieldOff, UserX } from "lucide-react";
+import { ArrowLeft, Loader2, Shield, ShieldOff, UserX, UserPlus, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Member = {
   id: string;
@@ -39,6 +48,11 @@ export default function ProjectMembersPage() {
   const [groupAdmin, setGroupAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteUid, setInviteUid] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState("");
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -87,6 +101,44 @@ export default function ProjectMembersPage() {
     }
   }
 
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteUid.trim()) return;
+    
+    setInviting(true);
+    setInviteError("");
+    setInviteSuccess("");
+    
+    try {
+      const res = await fetch(`/api/projects/${projectId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: inviteUid.trim() }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setInviteSuccess("User added successfully!");
+        setInviteUid("");
+        loadMembers();
+        setTimeout(() => setInviteOpen(false), 2000);
+      } else {
+        setInviteError(data.error || "Failed to add user");
+      }
+    } catch (e) {
+      setInviteError("Something went wrong");
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  function handleCopyLink() {
+    const link = `${window.location.origin}/projects/${projectId}`;
+    navigator.clipboard.writeText(link);
+    alert("Project link copied to clipboard!");
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -112,8 +164,48 @@ export default function ProjectMembersPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Active Members</CardTitle>
+          {groupAdmin && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleCopyLink}>
+                <Link2 className="mr-2 h-4 w-4" />
+                Copy Link
+              </Button>
+              <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Invite
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Invite to Project</DialogTitle>
+                    <DialogDescription>
+                      Enter the user's UID to add them directly to the project.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleInvite} className="space-y-4 pt-4">
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="User UID (e.g. jdoe123)"
+                        value={inviteUid}
+                        onChange={(e) => setInviteUid(e.target.value)}
+                        disabled={inviting}
+                      />
+                    </div>
+                    {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
+                    {inviteSuccess && <p className="text-sm text-green-500">{inviteSuccess}</p>}
+                    <Button type="submit" className="w-full" disabled={inviting || !inviteUid.trim()}>
+                      {inviting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Add Member
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-3">
           {project.members.map((member) => {

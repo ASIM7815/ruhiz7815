@@ -122,3 +122,39 @@ export async function POST(
 
   return NextResponse.json(message);
 }
+
+// DELETE /api/groups/[id]/messages — clear all messages (admin only)
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { user, error } = await requireAuth();
+  if (error || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  // Verify admin
+  const { data: participant } = await supabaseAdmin
+    .from("group_participants")
+    .select("role")
+    .eq("conversation_id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!participant || participant.role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+
+  const { error: dbError } = await supabaseAdmin
+    .from("group_messages")
+    .delete()
+    .eq("conversation_id", id);
+
+  if (dbError) {
+    return NextResponse.json({ error: "Failed to clear chat history" }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}

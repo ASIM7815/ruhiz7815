@@ -173,12 +173,14 @@ export default function ProjectMembersPage() {
                 Copy Link
               </Button>
               <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Invite
-                  </Button>
-                </DialogTrigger>
+                <DialogTrigger
+                  render={
+                    <Button size="sm">
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Invite
+                    </Button>
+                  }
+                />
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Invite to Project</DialogTitle>

@@ -95,16 +95,18 @@ export function MessageInput({
       <div className="flex items-end gap-2">
         {/* Emoji Picker */}
         <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="flex-shrink-0 h-9 w-9"
-              type="button"
-            >
-              <Smile className="h-5 w-5" />
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="flex-shrink-0 h-9 w-9"
+                type="button"
+              >
+                <Smile className="h-5 w-5" />
+              </Button>
+            }
+          />
           <PopoverContent className="w-auto p-2" side="top" align="start">
             <div className="flex gap-1">
               {QUICK_EMOJIS.map((emoji) => (

@@ -341,27 +341,33 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
           </div>
           <div className="flex gap-1">
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => alert("Group audio calls coming soon!")}>
-                  <Phone className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => alert("Group audio calls coming soon!")}>
+                    <Phone className="h-4 w-4" />
+                  </Button>
+                }
+              />
               <TooltipContent>Start audio call</TooltipContent>
             </Tooltip>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => alert("Group video calls coming soon!")}>
-                  <Video className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => alert("Group video calls coming soon!")}>
+                    <Video className="h-4 w-4" />
+                  </Button>
+                }
+              />
               <TooltipContent>Start video call</TooltipContent>
             </Tooltip>
             <Dialog open={showMembers} onOpenChange={setShowMembers}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <Users className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
+              <DialogTrigger
+                render={
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Users className="h-4 w-4" />
+                  </Button>
+                }
+              />
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Group Members</DialogTitle>

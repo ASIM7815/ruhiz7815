@@ -165,14 +165,16 @@ export function MessageBubble({
           >
             {/* React */}
             <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className="p-1.5 rounded-full hover:bg-accent text-muted-foreground transition-colors"
-                  title="React"
-                >
-                  <Smile className="h-4 w-4" />
-                </button>
-              </PopoverTrigger>
+              <PopoverTrigger
+                render={
+                  <button
+                    className="p-1.5 rounded-full hover:bg-accent text-muted-foreground transition-colors"
+                    title="React"
+                  >
+                    <Smile className="h-4 w-4" />
+                  </button>
+                }
+              />
               <PopoverContent
                 className="w-auto p-2"
                 side={isOwn ? "left" : "right"}
@@ -196,14 +198,16 @@ export function MessageBubble({
             {/* More Options (own messages only) */}
             {isOwn && (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="p-1.5 rounded-full hover:bg-accent text-muted-foreground transition-colors"
-                    title="More"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      className="p-1.5 rounded-full hover:bg-accent text-muted-foreground transition-colors"
+                      title="More"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  }
+                />
                 <DropdownMenuContent align={isOwn ? "end" : "start"}>
                   <DropdownMenuItem onClick={() => onEdit?.(id)}>
                     <Pencil className="h-4 w-4 mr-2" />

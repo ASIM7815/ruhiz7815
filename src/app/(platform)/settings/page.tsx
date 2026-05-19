@@ -65,38 +65,15 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetch("/api/user/me")
-      .then((r) => {
-        if (r.status === 401) {
-          console.error("User not authenticated");
-          window.location.href = "/login";
-          return null;
-        }
-        if (r.status === 401) {
-          window.location.href = "/login";
-          setLoading(false);
-          return null;
-        }
-        if (!r.ok) {
-          console.error(`Failed to load settings: HTTP ${r.status}`);
-          setLoading(false);
-          return null;
-        }
-        return r.json();
-      })
+      .then((r) => r.json())
       .then((data) => {
-        if (data) {
-          setProfile(data);
-          setForm({
-            name: data.name || "",
-            bio: data.bio || "",
-            university: data.university || "",
-            role: data.role || "MEMBER",
-          });
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load user settings:", err);
+        setProfile(data);
+        setForm({
+          name: data.name || "",
+          bio: data.bio || "",
+          university: data.university || "",
+          role: data.role || "MEMBER",
+        });
         setLoading(false);
       });
   }, []);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useRouter } from "next/navigation";
 import { Search, Bell, Sun, Moon } from "lucide-react";
@@ -23,7 +23,6 @@ export function Topbar() {
   } | null>(null);
   const [searching, setSearching] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   const userImage = user?.user_metadata?.avatar_url ?? undefined;
   const userName = user?.user_metadata?.full_name ?? "";
@@ -33,14 +32,6 @@ export function Topbar() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
-  useEffect(() => {
-    if (!user) return;
-    fetch("/api/notifications?unread=1&limit=1")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setUnreadCount(data?.unreadCount || 0))
-      .catch(() => null);
-  }, [user]);
 
   async function handleSearch(value: string) {
     setSearchUid(value);
@@ -67,48 +58,46 @@ export function Topbar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center gap-2 sm:gap-4 border-b bg-background/80 backdrop-blur-xl px-3 sm:px-4 lg:px-6 safe-area-inset-top">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 sm:gap-4 border-b bg-background/80 backdrop-blur-xl px-3 sm:px-4 lg:px-6">
       {/* Spacer for mobile menu button */}
       <div className="lg:hidden w-10 shrink-0" />
 
-      {/* Search by UID - Hidden on small mobile, visible on tablet+ */}
+      {/* Search by UID */}
       <div className="flex-1 max-w-md relative hidden sm:block">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by 5-digit UID..."
-            className="pl-10 h-9 sm:h-10 bg-muted/50 border-0 text-base touch-manipulation"
+            className="pl-10 h-9 bg-muted/50 border-0"
             value={searchUid}
             onChange={(e) => handleSearch(e.target.value)}
             onBlur={() => setTimeout(() => setShowResult(false), 200)}
             onFocus={() => searchResult && setShowResult(true)}
             maxLength={5}
-            inputMode="numeric"
-            style={{ fontSize: "16px" }}
           />
         </div>
         {showResult && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg p-2 z-50 max-w-md">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg p-2 z-50">
             {searching ? (
               <p className="text-sm text-muted-foreground p-2">Searching...</p>
             ) : searchResult ? (
               <button
-                className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-muted active:bg-muted/70 transition-colors text-left touch-manipulation"
+                className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-muted transition-colors text-left"
                 onClick={() => {
                   router.push(`/students/${searchResult.uid}`);
                   setShowResult(false);
                   setSearchUid("");
                 }}
               >
-                <Avatar className="h-9 w-9 sm:h-8 sm:w-8">
+                <Avatar className="h-8 w-8">
                   <AvatarImage src={searchResult.image || undefined} />
                   <AvatarFallback>
                     {searchResult.name?.charAt(0)?.toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{searchResult.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">
+                <div>
+                  <p className="text-sm font-medium">{searchResult.name}</p>
+                  <p className="text-xs text-muted-foreground">
                     #{searchResult.uid}
                     {searchResult.university ? ` · ${searchResult.university}` : ""}
                   </p>
@@ -124,39 +113,25 @@ export function Topbar() {
       {/* Spacer on mobile to push icons right */}
       <div className="flex-1 sm:hidden" />
 
-      {/* Right side - Mobile optimized */}
+      {/* Right side */}
       <div className="flex items-center gap-1 sm:gap-2">
         <Button
           variant="ghost"
           size="icon"
-          className="h-10 w-10 touch-manipulation active:scale-95 transition-transform"
+          className="h-10 w-10"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
-          <Sun className="h-4 w-4 sm:h-5 sm:w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-4 w-4 sm:h-5 sm:w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-10 w-10 touch-manipulation active:scale-95 transition-transform"
-          onClick={() => router.push("/notifications")}
-        >
-          <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground ring-2 ring-background">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
+        <Button variant="ghost" size="icon" className="relative h-10 w-10">
+          <Bell className="h-4 w-4" />
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
         </Button>
-        <button 
-          onClick={() => router.push("/profile")}
-          className="touch-manipulation active:scale-95 transition-transform"
-        >
-          <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
-            <AvatarImage src={userImage} />
-            <AvatarFallback className="text-xs">{userInitials}</AvatarFallback>
-          </Avatar>
-        </button>
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={userImage} />
+          <AvatarFallback>{userInitials}</AvatarFallback>
+        </Avatar>
       </div>
     </header>
   );

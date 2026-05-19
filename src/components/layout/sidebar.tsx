@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useSupabaseUser, signOut } from "@/hooks/use-supabase-user";
 import {
   ChevronLeft,
@@ -32,8 +32,6 @@ type SidebarNavItemsProps = {
   userImage?: string;
   userInitials: string;
   userName: string;
-  showMarketplace: boolean;
-  unreadMessages: number;
 };
 
 function SidebarNavItems({
@@ -44,25 +42,7 @@ function SidebarNavItems({
   userImage,
   userInitials,
   userName,
-  showMarketplace,
-  unreadMessages,
 }: SidebarNavItemsProps) {
-  const mainNav = useMemo(
-    () => platformNav.filter((item) => item.href !== "/marketplace" || showMarketplace),
-    [showMarketplace]
-  );
-
-  // Add unread count to Messages nav item
-  const navWithBadges = useMemo(
-    () =>
-      mainNav.map((item) =>
-        item.href === "/messages" && unreadMessages > 0
-          ? { ...item, badge: unreadMessages }
-          : item
-      ),
-    [mainNav, unreadMessages]
-  );
-
   return (
     <TooltipProvider delay={0}>
       <div className="flex flex-col h-full">
@@ -90,7 +70,7 @@ function SidebarNavItems({
           >
             Main
           </p>
-          {navWithBadges.map((item) => {
+          {platformNav.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
             const link = (
@@ -211,52 +191,12 @@ export function Sidebar() {
   const userName = user?.user_metadata?.full_name ?? "";
   const userEmail = user?.email ?? "";
   const userImage = user?.user_metadata?.avatar_url ?? undefined;
-  const [showMarketplace, setShowMarketplace] = useState(false);
-  const [unreadMessages, setUnreadMessages] = useState(0);
   const userInitials = userName
     .split(" ")
     .map((n: string) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
-  useEffect(() => {
-    if (!user) return;
-    fetch("/api/user/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const enabled =
-          data?.platformRole === "ADMIN" ||
-          data?.platformRole === "MODERATOR" ||
-          (data?.marketplaceStatus === "ACTIVE" &&
-            ["BUYER", "SELLER", "VERIFIED_SELLER"].includes(data?.marketplaceRole));
-        setShowMarketplace(!!enabled);
-      })
-      .catch(() => setShowMarketplace(false));
-  }, [user]);
-
-  // Fetch unread message count
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchUnreadCount = async () => {
-      try {
-        const res = await fetch("/api/messages/unread-count");
-        if (res.ok) {
-          const data = await res.json();
-          setUnreadMessages(data.unreadCount);
-        }
-      } catch {
-        // Silently fail
-      }
-    };
-
-    fetchUnreadCount();
-
-    // Poll every 30 seconds
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
 
   return (
     <>
@@ -275,8 +215,6 @@ export function Sidebar() {
             userImage={userImage}
             userInitials={userInitials}
             userName={userName}
-            showMarketplace={showMarketplace}
-            unreadMessages={unreadMessages}
           />
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -305,8 +243,6 @@ export function Sidebar() {
             userImage={userImage}
             userInitials={userInitials}
             userName={userName}
-            showMarketplace={showMarketplace}
-            unreadMessages={unreadMessages}
           />
         </SheetContent>
       </Sheet>

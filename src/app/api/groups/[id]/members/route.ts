@@ -12,7 +12,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error } = await requireAuth();
+  const { user, error, status } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -42,7 +42,16 @@ export async function GET(
     return NextResponse.json({ error: "Failed to load members" }, { status: 500 });
   }
 
-  // Fetch user details so group chat can show sender names for every member.
+  // Only admin can see full member details (privacy)
+  if (myParticipant.role !== "ADMIN") {
+    return NextResponse.json({
+      count: participants?.length || 0,
+      myRole: "MEMBER",
+      members: [],
+    });
+  }
+
+  // For admins, fetch user details for each participant
   const userIds = (participants || []).map((p) => p.user_id);
   const users = await db.user.findMany({
     where: { id: { in: userIds } },
@@ -57,7 +66,7 @@ export async function GET(
 
   return NextResponse.json({
     count: members.length,
-    myRole: myParticipant.role,
+    myRole: "ADMIN",
     members,
   });
 }
@@ -67,7 +76,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error } = await requireAuth();
+  const { user, error, status } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -113,22 +122,6 @@ export async function POST(
 
   if (dbError) {
     return NextResponse.json({ error: "Failed to add member" }, { status: 500 });
-  }
-
-  const { data: conversation } = await supabaseAdmin
-    .from("group_conversations")
-    .select("type, entity_id")
-    .eq("id", id)
-    .single();
-
-  if (conversation?.type === "PROJECT") {
-    await db.projectMember
-      .upsert({
-        where: { projectId_userId: { projectId: conversation.entity_id, userId } },
-        create: { projectId: conversation.entity_id, userId, role: "MEMBER", status: "ACTIVE" },
-        update: { role: "MEMBER", status: "ACTIVE", removedAt: null },
-      })
-      .catch(() => null);
   }
 
   return NextResponse.json({ success: true });

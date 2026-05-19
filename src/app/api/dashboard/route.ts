@@ -8,13 +8,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  try {
-    const { user, error, status } = await requireAuth();
-    if (error || !user) {
-      return NextResponse.json({ error: error || "Unauthorized" }, { status: status || 401 });
-    }
+  const { user, error, status } = await requireAuth();
+  if (error || !user) {
+    return NextResponse.json({ error: error || "Unauthorized" }, { status: status || 401 });
+  }
 
-    const userId = user.id;
+  const userId = user.id;
 
   // Fetch counts in parallel
   const [
@@ -151,11 +150,4 @@ export async function GET() {
     productivityScore: activityScore,
     recentActivity: activity.slice(0, 8),
   });
-  } catch (err) {
-    console.error("[dashboard] GET error:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
 }

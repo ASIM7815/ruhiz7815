@@ -22,9 +22,6 @@ model User {
   bio                String?
   university         String?
   role               String    @default("MEMBER") // LEADER, MEMBER, BOTH
-  platformRole       String    @default("USER") @map("platform_role") // USER, MODERATOR, ADMIN
-  marketplaceRole    String    @default("NONE") @map("marketplace_role") // NONE, BUYER, SELLER, VERIFIED_SELLER
-  marketplaceStatus  String    @default("DISABLED") @map("marketplace_status") // DISABLED, PENDING_REVIEW, ACTIVE, SUSPENDED
   reputation         Int       @default(0)
   onboardingComplete Boolean   @default(false) @map("onboarding_complete")
   createdAt          DateTime  @default(now()) @map("created_at")
@@ -47,10 +44,6 @@ model User {
   startupMembers     StartupMember[]
   startupJoinRequests StartupJoinRequest[]
   studyGroupJoinRequests StudyGroupJoinRequest[]
-  reports            Report[]       @relation("ReportReporter")
-  auditLogs          AuditLog[]
-  fileAssets         FileAsset[]
-  reviews            Review[]
 
   @@map("users")
 }
@@ -123,7 +116,6 @@ model Project {
   problem     String
   description String
   status      String   @default("OPEN") // OPEN, IN_PROGRESS, COMPLETED
-  visibility  String   @default("PUBLIC") // PUBLIC, PRIVATE, UNLISTED
   timeline    String?
   maxMembers  Int      @default(4) @map("max_members")
   ownerId     String   @map("owner_id")
@@ -156,9 +148,7 @@ model ProjectMember {
   projectId String   @map("project_id")
   userId    String   @map("user_id")
   role      String   @default("MEMBER") // LEADER, MEMBER
-  status    String   @default("ACTIVE") // ACTIVE, REMOVED, LEFT
   joinedAt  DateTime @default(now()) @map("joined_at")
-  removedAt DateTime? @map("removed_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -207,25 +197,9 @@ model Resource {
   authorId    String   @map("author_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  author  User     @relation(fields: [authorId], references: [id])
-  reviews Review[]
+  author User @relation(fields: [authorId], references: [id])
 
   @@map("resources")
-}
-
-model Review {
-  id         String   @id @default(cuid())
-  resourceId String   @map("resource_id")
-  userId     String   @map("user_id")
-  rating     Int      // 1-5
-  comment    String?
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([resourceId, userId])
-  @@map("reviews")
 }
 
 model StudyGroup {
@@ -265,10 +239,8 @@ model Listing {
   condition   String?  // NEW, LIKE_NEW, GOOD, FAIR
   imageUrl    String?  @map("image_url")
   sellerId    String   @map("seller_id")
-  status      String   @default("ACTIVE") // ACTIVE, SOLD, HIDDEN, REMOVED, UNDER_REVIEW
   sold        Boolean  @default(false)
   createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
 
   seller User @relation(fields: [sellerId], references: [id])
 
@@ -298,10 +270,6 @@ model Notification {
   type      String   // TEAM_INVITE, PROJECT_UPDATE, MESSAGE, REPUTATION, etc.
   title     String
   message   String
-  link      String?
-  actorId   String?  @map("actor_id")
-  entityType String? @map("entity_type")
-  entityId   String? @map("entity_id")
   read      Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -316,10 +284,7 @@ model JoinRequest {
   userId    String   @map("user_id")
   message   String?
   status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
-  reviewedBy String?  @map("reviewed_by")
-  reviewedAt DateTime? @map("reviewed_at")
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -369,57 +334,4 @@ model StudyGroupJoinRequest {
 
   @@unique([groupId, userId])
   @@map("study_group_join_requests")
-}
-
-model Report {
-  id         String    @id @default(cuid())
-  reporterId String    @map("reporter_id")
-  targetType String    @map("target_type") // USER, PROJECT, GROUP, MESSAGE, LISTING, RESOURCE, STARTUP, STUDY_GROUP
-  targetId   String    @map("target_id")
-  reason     String
-  details    String?
-  status     String    @default("OPEN") // OPEN, IN_REVIEW, RESOLVED, DISMISSED
-  reviewedBy String?   @map("reviewed_by")
-  reviewedAt DateTime? @map("reviewed_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-
-  reporter User @relation("ReportReporter", fields: [reporterId], references: [id])
-
-  @@index([status, createdAt])
-  @@index([targetType, targetId])
-  @@map("reports")
-}
-
-model AuditLog {
-  id         String   @id @default(cuid())
-  actorId    String   @map("actor_id")
-  action     String   // USER_SUSPENDED, PROJECT_ARCHIVED, LISTING_REMOVED, etc.
-  entityType String   @map("entity_type")
-  entityId   String   @map("entity_id")
-  metadata   String?  // JSON string
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  actor User @relation(fields: [actorId], references: [id])
-
-  @@index([actorId, createdAt])
-  @@index([entityType, entityId])
-  @@map("audit_logs")
-}
-
-model FileAsset {
-  id         String   @id @default(cuid())
-  userId     String   @map("user_id")
-  fileName   String   @map("file_name")
-  fileUrl    String   @map("file_url")
-  fileSize   Int      @map("file_size")
-  mimeType   String   @map("mime_type")
-  entityType String   @map("entity_type") // projectChat, groupChat, marketplace, profile, resource
-  entityId   String?  @map("entity_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId, createdAt])
-  @@index([entityType, entityId])
-  @@map("file_assets")
 }

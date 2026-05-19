@@ -47,26 +47,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetch("/api/dashboard")
-      .then((r) => {
-        if (r.status === 401) {
-          // Redirect to login if unauthorized
-          window.location.href = "/login";
-          return null;
-        }
-        if (!r.ok) {
-          console.error(`Failed to load dashboard: HTTP ${r.status}`);
-          return null;
-        }
-        return r.json();
-      })
-      .then((d) => { 
-        if (d) setData(d); 
-        setLoading(false); 
-      })
-      .catch((err) => {
-        console.error("Failed to load dashboard:", err);
-        setLoading(false);
-      });
+      .then((r) => r.json())
+      .then((d) => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
   const stats = [

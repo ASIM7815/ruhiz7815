@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { supabaseAdmin as supabase } from "@/lib/supabase-server";
-import { canAccessMarketplace } from "@/lib/services/permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,12 +11,9 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error } = await requireAuth();
+  const { user, error, status } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!canAccessMarketplace(user)) {
-    return NextResponse.json({ error: "Marketplace access is not enabled for your account" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -28,9 +24,6 @@ export async function POST(
 
   if (!listing) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
-  }
-  if (listing.sold || listing.status !== "ACTIVE") {
-    return NextResponse.json({ error: "Listing is not available" }, { status: 400 });
   }
 
   if (listing.sellerId === user.id) {

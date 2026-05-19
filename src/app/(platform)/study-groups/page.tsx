@@ -81,24 +81,9 @@ export default function StudyGroupsPage() {
 
   useEffect(() => {
     fetch("/api/study-groups")
-      .then((r) => {
-        if (r.status === 401) {
-          window.location.href = "/login";
-          return { groups: [] };
-        }
-        if (!r.ok) {
-          console.error(`Failed to load study groups: HTTP ${r.status}`);
-          return { groups: [] };
-        }
-        return r.json();
-      })
+      .then((r) => r.json())
       .then((data) => {
         setGroups(data.groups || []);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load study groups:", err);
-        setGroups([]);
         setLoading(false);
       });
   }, []);
@@ -108,40 +93,19 @@ export default function StudyGroupsPage() {
     setMyLoading(true);
     try {
       const res = await fetch("/api/study-groups");
-      if (!res.ok) {
-        console.error("Failed to load my study groups:", res.status);
-        setMyGroups([]);
-        setMyLoading(false);
-        return;
-      }
       const data = await res.json();
       const allGroups: StudyGroup[] = data.groups || [];
 
       // For each group, check if user is a leader and get requests
       const withDetails = await Promise.all(
         allGroups.map(async (g) => {
-          try {
-            const reqRes = await fetch(`/api/study-groups/${g.id}/join`);
-            const isLeader = reqRes.ok;
-            let pendingRequests = [];
-            if (isLeader) {
-              try {
-                pendingRequests = await reqRes.json();
-              } catch {
-                pendingRequests = [];
-              }
-            }
-            return { ...g, isLeader, pendingRequests } as MyGroup;
-          } catch (err) {
-            console.error(`Failed to load requests for group ${g.id}:`, err);
-            return { ...g, isLeader: false, pendingRequests: [] } as MyGroup;
-          }
+          const reqRes = await fetch(`/api/study-groups/${g.id}/join`);
+          const isLeader = reqRes.ok;
+          const pendingRequests = isLeader ? await reqRes.json() : [];
+          return { ...g, isLeader, pendingRequests } as MyGroup;
         })
       );
       setMyGroups(withDetails.filter((g) => g.isLeader));
-    } catch (err) {
-      console.error("Error loading my study groups:", err);
-      setMyGroups([]);
     } finally {
       setMyLoading(false);
     }

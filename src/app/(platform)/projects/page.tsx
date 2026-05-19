@@ -60,7 +60,6 @@ const statusColors: Record<string, string> = {
   OPEN: "bg-emerald-500/10 text-emerald-600 border-emerald-200",
   IN_PROGRESS: "bg-blue-500/10 text-blue-600 border-blue-200",
   COMPLETED: "bg-gray-500/10 text-gray-600 border-gray-200",
-  ARCHIVED: "bg-slate-500/10 text-slate-600 border-slate-200",
 };
 
 export default function ProjectsPage() {
@@ -72,73 +71,37 @@ export default function ProjectsPage() {
   const [myProjects, setMyProjects] = useState<MyProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [myLoading, setMyLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [skillFilter, setSkillFilter] = useState("");
-  const [timelineFilter, setTimelineFilter] = useState("");
+  const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
-    if (statusFilter === "Open") params.set("status", "OPEN");
-    if (statusFilter === "In Progress") params.set("status", "IN_PROGRESS");
-    if (statusFilter === "Completed") params.set("status", "COMPLETED");
-    
+    if (filter === "Open") params.set("status", "OPEN");
+    if (filter === "In Progress") params.set("status", "IN_PROGRESS");
     fetch(`/api/projects?${params}`)
-      .then((r) => {
-        if (r.status === 401) {
-          window.location.href = "/login";
-          return { projects: [] };
-        }
-        if (!r.ok) {
-          console.error(`Failed to load projects: HTTP ${r.status}`);
-          return { projects: [] };
-        }
-        return r.json();
-      })
+      .then((r) => r.json())
       .then((data) => {
         setProjects(data.projects || []);
         setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load projects:", err);
-        setProjects([]);
-        setLoading(false);
       });
-  }, [statusFilter]);
+  }, [filter]);
 
   const loadMyProjects = useCallback(async () => {
     if (!userId) return;
     setMyLoading(true);
     try {
       const res = await fetch(`/api/projects?owner=me`);
-      if (!res.ok) {
-        console.error("Failed to load my projects:", res.status);
-        setMyProjects([]);
-        setMyLoading(false);
-        return;
-      }
       const data = await res.json();
       const owned: Project[] = data.projects || [];
       const withRequests = await Promise.all(
         owned.map(async (p) => {
-          try {
-            const rr = await fetch(`/api/projects/${p.id}/join`);
-            if (!rr.ok) {
-              return { ...p, pendingRequests: [] } as MyProject;
-            }
-            const reqs = await rr.json();
-            return { ...p, pendingRequests: reqs } as MyProject;
-          } catch (err) {
-            console.error(`Failed to load requests for project ${p.id}:`, err);
-            return { ...p, pendingRequests: [] } as MyProject;
-          }
+          const rr = await fetch(`/api/projects/${p.id}/join`);
+          const reqs = rr.ok ? await rr.json() : [];
+          return { ...p, pendingRequests: reqs } as MyProject;
         })
       );
       setMyProjects(withRequests);
-    } catch (err) {
-      console.error("Error loading my projects:", err);
-      setMyProjects([]);
     } finally {
       setMyLoading(false);
     }
@@ -168,28 +131,13 @@ export default function ProjectsPage() {
     }
   };
 
-  const filtered = projects.filter((p) => {
-    // Search filter
-    const searchLower = search.toLowerCase();
-    const matchesSearch =
-      !search ||
-      p.title.toLowerCase().includes(searchLower) ||
-      p.description.toLowerCase().includes(searchLower) ||
-      p.skills.some((s) => s.toLowerCase().includes(searchLower)) ||
-      p.owner.name.toLowerCase().includes(searchLower);
-
-    // Skill filter
-    const matchesSkill =
-      !skillFilter ||
-      p.skills.some((s) => s.toLowerCase().includes(skillFilter.toLowerCase()));
-
-    // Timeline filter
-    const matchesTimeline =
-      !timelineFilter ||
-      (p.timeline && p.timeline.toLowerCase().includes(timelineFilter.toLowerCase()));
-
-    return matchesSearch && matchesSkill && matchesTimeline;
-  });
+  const filtered = search
+    ? projects.filter(
+        (p) =>
+          p.title.toLowerCase().includes(search.toLowerCase()) ||
+          p.skills.some((s) => s.toLowerCase().includes(search.toLowerCase()))
+      )
+    : projects;
 
   const totalPending = myProjects.reduce((s, p) => s + p.pendingRequests.length, 0);
 
@@ -239,62 +187,27 @@ export default function ProjectsPage() {
       {tab === "browse" ? (
         <>
           {/* Search and Filters */}
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by title, description, skill, or owner..."
-                  className="pl-10"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Filter Pills */}
-            <div className="flex flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">Status:</span>
-                {["All", "Open", "In Progress", "Completed"].map((f) => (
-                  <Badge
-                    key={f}
-                    variant={statusFilter === f ? "default" : "outline"}
-                    className="cursor-pointer hover:bg-primary/10 px-3 py-1"
-                    onClick={() => setStatusFilter(f)}
-                  >
-                    {f}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* Advanced Filters */}
-            <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Filter by skill (e.g., React, Python)..."
-                className="sm:max-w-xs"
-                value={skillFilter}
-                onChange={(e) => setSkillFilter(e.target.value)}
+                placeholder="Search projects by title or skill..."
+                className="pl-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
-              <Input
-                placeholder="Filter by timeline (e.g., 3 months)..."
-                className="sm:max-w-xs"
-                value={timelineFilter}
-                onChange={(e) => setTimelineFilter(e.target.value)}
-              />
-              {(skillFilter || timelineFilter) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSkillFilter("");
-                    setTimelineFilter("");
-                  }}
+            </div>
+            <div className="flex gap-2">
+              {["All", "Open", "In Progress"].map((f) => (
+                <Badge
+                  key={f}
+                  variant={filter === f ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 px-4 py-1.5"
+                  onClick={() => setFilter(f)}
                 >
-                  Clear Filters
-                </Button>
-              )}
+                  {f}
+                </Badge>
+              ))}
             </div>
           </div>
 

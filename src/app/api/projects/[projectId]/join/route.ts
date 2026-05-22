@@ -70,7 +70,13 @@ export async function POST(
       });
     }
     if (existingRequest.status === "ACCEPTED") {
-      return NextResponse.json({ error: "Already accepted" }, { status: 409 });
+      // If accepted but not a member, add them as member (data inconsistency fix)
+      if (!existingMember) {
+        await db.projectMember.create({
+          data: { projectId, userId: user.id, role: "MEMBER" },
+        });
+      }
+      return NextResponse.json({ error: "You are already a member of this project" }, { status: 409 });
     }
     if (existingRequest.status === "REJECTED") {
       if (project._count.members >= project.maxMembers) {

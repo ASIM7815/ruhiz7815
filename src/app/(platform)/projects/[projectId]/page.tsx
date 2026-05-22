@@ -166,16 +166,39 @@ export default function ProjectDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: joinMessage || undefined }),
       });
+      
+      console.log("Join request response status:", res.status);
+      
       if (res.ok) {
-        setJoinStatus("pending");
-        setShowForm(false);
-        setJoinMessage("");
+        const data = await res.json();
+        console.log("Join request success data:", data);
+        if (data.status === "PENDING") {
+          setJoinStatus("pending");
+          setShowForm(false);
+          setJoinMessage("");
+        }
       } else {
         const data = await res.json().catch(() => ({}));
-        if (data.error?.includes("already pending")) setJoinStatus("pending");
-        if (data.error?.includes("already a member")) setJoinStatus("member");
-        setJoinError(data.error || "Could not send join request.");
+        console.log("Join request error data:", data);
+        
+        if (data.error?.includes("already pending") || data.error?.includes("PENDING")) {
+          setJoinStatus("pending");
+          setShowForm(false);
+        } else if (data.error?.includes("already a member") || data.error?.includes("Already a member") || data.error?.includes("already accepted")) {
+          setJoinStatus("member");
+          setShowForm(false);
+          await loadProject(false);
+        } else if (data.error?.includes("own this project") || data.error?.includes("You own")) {
+          setJoinStatus("owner");
+          setShowForm(false);
+          await loadProject(false);
+        } else {
+          setJoinError(data.error || "Could not send join request.");
+        }
       }
+    } catch (err) {
+      console.error("Join request error:", err);
+      setJoinError("Network error. Please try again.");
     } finally {
       setSubmitting(false);
     }

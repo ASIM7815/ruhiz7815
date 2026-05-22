@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
@@ -11,6 +11,7 @@ import {
   Clock,
   Send,
   CheckCircle2,
+  Inbox,
   Loader2,
   XCircle,
 } from "lucide-react";
@@ -51,6 +52,22 @@ interface ProjectDetail {
     role: string;
   }[];
   viewerStatus?: "none" | "pending" | "member" | "owner";
+  groupConversationId: string | null;
+}
+
+interface JoinRequest {
+  id: string;
+  userId: string;
+  message: string | null;
+  status: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    image: string | null;
+    uid: string | null;
+    university: string | null;
+  };
 }
 
 export default function ProjectDetailPage() {
@@ -61,23 +78,57 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [joinStatus, setJoinStatus] = useState<"none" | "pending" | "member" | "owner">("none");
   const [joinMessage, setJoinMessage] = useState("");
+  const [joinError, setJoinError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [ownerRequests, setOwnerRequests] = useState<JoinRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [requestActionLoading, setRequestActionLoading] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState("");
+
+  const loadProject = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
+    const res = await fetch(`/api/projects/${projectId}`);
+    if (!res.ok) {
+      setProject(null);
+      setLoading(false);
+      return;
+    }
+
+    const data = await res.json();
+    setProject(data);
+    if (data.viewerStatus) {
+      setJoinStatus(data.viewerStatus);
+    } else if (userId) {
+      if (data.owner?.id === userId) setJoinStatus("owner");
+      else if (data.members?.some((m: { id: string }) => m.id === userId)) setJoinStatus("member");
+    }
+    setLoading(false);
+  }, [projectId, userId]);
+
+  const loadOwnerRequests = useCallback(async (showSpinner = false) => {
+    if (!projectId || joinStatus !== "owner") return;
+    if (showSpinner) setRequestsLoading(true);
+    setRequestError("");
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/join`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setRequestError(data.error || "Could not load join requests.");
+        return;
+      }
+
+      const data = await res.json();
+      setOwnerRequests(Array.isArray(data) ? data : []);
+    } finally {
+      if (showSpinner) setRequestsLoading(false);
+    }
+  }, [joinStatus, projectId]);
 
   useEffect(() => {
-    fetch(`/api/projects/${projectId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setProject(data);
-        if (data.viewerStatus) {
-          setJoinStatus(data.viewerStatus);
-        } else if (userId) {
-          if (data.owner?.id === userId) setJoinStatus("owner");
-          else if (data.members?.some((m: { id: string }) => m.id === userId)) setJoinStatus("member");
-        }
-        setLoading(false);
-      });
-  }, [projectId, userId]);
+    loadProject(true);
+  }, [loadProject]);
 
   useEffect(() => {
     if (!userId || !projectId || joinStatus !== "none") return;
@@ -93,8 +144,22 @@ export default function ProjectDetailPage() {
       .catch(() => null);
   }, [userId, projectId, joinStatus]);
 
+  useEffect(() => {
+    if (joinStatus !== "owner") return;
+
+    loadOwnerRequests(true);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadOwnerRequests(false);
+      }
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [joinStatus, loadOwnerRequests]);
+
   const handleJoinRequest = async () => {
     setSubmitting(true);
+    setJoinError("");
     try {
       const res = await fetch(`/api/projects/${projectId}/join`, {
         method: "POST",
@@ -104,13 +169,39 @@ export default function ProjectDetailPage() {
       if (res.ok) {
         setJoinStatus("pending");
         setShowForm(false);
+        setJoinMessage("");
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (data.error?.includes("already pending")) setJoinStatus("pending");
         if (data.error?.includes("already a member")) setJoinStatus("member");
+        setJoinError(data.error || "Could not send join request.");
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleOwnerRequest = async (requestId: string, action: "accept" | "reject") => {
+    setRequestActionLoading(requestId);
+    setRequestError("");
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/join/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setRequestError(data.error || "Could not process the request.");
+        return;
+      }
+
+      setOwnerRequests((prev) => prev.filter((request) => request.id !== requestId));
+      await loadProject(false);
+    } finally {
+      setRequestActionLoading(null);
     }
   };
 
@@ -135,6 +226,10 @@ export default function ProjectDetailPage() {
     project.status === "IN_PROGRESS"
       ? "In Progress"
       : project.status.charAt(0) + project.status.slice(1).toLowerCase();
+  const groupHref = project.groupConversationId
+    ? `/messages?group=${project.groupConversationId}`
+    : "/messages?tab=groups";
+  const canOpenGroupChat = Boolean(project.groupConversationId) || project.members.length > 1;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -236,10 +331,17 @@ export default function ProjectDetailPage() {
                   <Button className="w-full" size="lg" variant="outline" disabled>
                     Your Project
                   </Button>
-                  <Button className="w-full" size="lg" render={<Link href="/messages?tab=groups" />}>
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Open Group Chat
-                  </Button>
+                  {canOpenGroupChat ? (
+                    <Button className="w-full" size="lg" render={<Link href={groupHref} />}>
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Open Group Chat
+                    </Button>
+                  ) : (
+                    <Button className="w-full" size="lg" variant="outline" disabled>
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Group starts after approval
+                    </Button>
+                  )}
                 </div>
               ) : joinStatus === "member" ? (
                 <div className="space-y-2">
@@ -247,7 +349,7 @@ export default function ProjectDetailPage() {
                     <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
                     You&apos;re a Member
                   </Button>
-                  <Button className="w-full" size="lg" render={<Link href="/messages?tab=groups" />}>
+                  <Button className="w-full" size="lg" render={<Link href={groupHref} />}>
                     <MessageSquare className="mr-2 h-4 w-4" />
                     Open Group Chat
                   </Button>
@@ -287,6 +389,9 @@ export default function ProjectDetailPage() {
                       <XCircle className="h-4 w-4" />
                     </Button>
                   </div>
+                  {joinError && (
+                    <p className="text-sm text-destructive">{joinError}</p>
+                  )}
                 </div>
               ) : (
                 <Button
@@ -296,6 +401,80 @@ export default function ProjectDetailPage() {
                 >
                   Apply to Join
                 </Button>
+              )}
+              {joinStatus === "owner" && (
+                <div className="rounded-lg border">
+                  <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2">
+                    <Inbox className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-medium">Join Requests</p>
+                    {ownerRequests.length > 0 && (
+                      <Badge className="ml-auto text-[10px]">{ownerRequests.length}</Badge>
+                    )}
+                  </div>
+                  <div className="space-y-3 p-3">
+                    {requestsLoading ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading requests
+                      </div>
+                    ) : ownerRequests.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No pending requests yet.</p>
+                    ) : (
+                      ownerRequests.map((request) => (
+                        <div key={request.id} className="space-y-3 rounded-lg border p-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={request.user.image || undefined} />
+                              <AvatarFallback>
+                                {request.user.name?.charAt(0)?.toUpperCase() || "U"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{request.user.name}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {request.user.university || "Student"}
+                                {request.user.uid ? ` · #${request.user.uid}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                          {request.message && (
+                            <p className="line-clamp-3 text-sm text-muted-foreground">
+                              &ldquo;{request.message}&rdquo;
+                            </p>
+                          )}
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleOwnerRequest(request.id, "accept")}
+                              disabled={requestActionLoading === request.id}
+                              className="bg-emerald-600 hover:bg-emerald-700"
+                            >
+                              {requestActionLoading === request.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="mr-1 h-4 w-4" />
+                              )}
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOwnerRequest(request.id, "reject")}
+                              disabled={requestActionLoading === request.id}
+                              className="border-red-300 text-red-600 hover:bg-red-50"
+                            >
+                              <XCircle className="mr-1 h-4 w-4" />
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    {requestError && (
+                      <p className="text-sm text-destructive">{requestError}</p>
+                    )}
+                  </div>
+                </div>
               )}
               <Separator />
               <div className="flex items-center gap-3">

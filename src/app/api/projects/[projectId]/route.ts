@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth-helpers";
+import { getProjectGroupConversationId } from "@/lib/project-group-chat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,7 @@ export async function GET(
   }
 
   let viewerStatus: "none" | "pending" | "member" | "owner" = "none";
+  let groupConversationId: string | null = null;
 
   if (viewer) {
     if (project.owner.id === viewer.id) {
@@ -51,6 +53,10 @@ export async function GET(
         viewerStatus = "pending";
       }
     }
+
+    if (viewerStatus === "owner" || viewerStatus === "member") {
+      groupConversationId = await getProjectGroupConversationId(projectId).catch(() => null);
+    }
   }
 
   return NextResponse.json({
@@ -65,6 +71,7 @@ export async function GET(
     skills: project.skills.map((s) => s.skill),
     owner: project.owner,
     viewerStatus,
+    groupConversationId,
     members: project.members.map((m) => ({
       id: m.user.id,
       name: m.user.name,

@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const GROUP_MESSAGES_POLL_MS = 2500;
+
 interface GroupMessage {
   id: string;
   conversation_id: string;
@@ -63,6 +65,53 @@ interface GroupChatProps {
   onBack?: () => void;
 }
 
+function sortMessages(messages: GroupMessage[]) {
+  return [...messages].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
+
+function isOptimisticMessage(message: GroupMessage) {
+  return message.id.startsWith("temp-");
+}
+
+function matchesOptimisticMessage(optimistic: GroupMessage, saved: GroupMessage) {
+  if (!isOptimisticMessage(optimistic)) return false;
+  const sentCloseTogether =
+    Math.abs(new Date(optimistic.created_at).getTime() - new Date(saved.created_at).getTime()) < 30000;
+
+  return (
+    sentCloseTogether &&
+    optimistic.sender_id === saved.sender_id &&
+    optimistic.message_type === saved.message_type &&
+    optimistic.content === saved.content
+  );
+}
+
+function mergeFetchedMessages(current: GroupMessage[], fetched: GroupMessage[]) {
+  const pendingMessages = current.filter(
+    (message) =>
+      isOptimisticMessage(message) &&
+      !fetched.some((savedMessage) => matchesOptimisticMessage(message, savedMessage))
+  );
+
+  return sortMessages([...fetched, ...pendingMessages]);
+}
+
+function mergeIncomingMessage(current: GroupMessage[], incoming: GroupMessage) {
+  let replacedOptimisticMessage = false;
+  const withoutDuplicates = current.filter((message) => {
+    if (message.id === incoming.id) return false;
+    if (!replacedOptimisticMessage && matchesOptimisticMessage(message, incoming)) {
+      replacedOptimisticMessage = true;
+      return false;
+    }
+    return true;
+  });
+
+  return sortMessages([...withoutDuplicates, incoming]);
+}
+
 export function GroupChat({ groupId, onBack }: GroupChatProps) {
   const { user } = useSupabaseUser();
   const [messages, setMessages] = useState<GroupMessage[]>([]);
@@ -74,12 +123,35 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   const [sending, setSending] = useState(false);
   const [userNames, setUserNames] = useState<Record<string, { name: string; image: string | null }>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<GroupMessage[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
+
+  const loadMessages = useCallback(async () => {
+    if (!groupId) return;
+
+    const res = await fetch(`/api/groups/${groupId}/messages`);
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const fetchedMessages = (data.messages || []) as GroupMessage[];
+    const previousLastId = messagesRef.current.at(-1)?.id;
+    const fetchedLastId = fetchedMessages.at(-1)?.id;
+
+    setMessages((prev) => mergeFetchedMessages(prev, fetchedMessages));
+
+    if (fetchedLastId && fetchedLastId !== previousLastId) {
+      setTimeout(scrollToBottom, 100);
+    }
+  }, [groupId, scrollToBottom]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Load group details
   useEffect(() => {
@@ -93,14 +165,12 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   // Load messages
   useEffect(() => {
     if (!groupId) return;
-    fetch(`/api/groups/${groupId}/messages`)
-      .then((r) => r.json())
-      .then((data) => {
-        setMessages(data.messages || []);
-        setTimeout(scrollToBottom, 100);
-      })
-      .catch(console.error);
-  }, [groupId, scrollToBottom]);
+    const timeoutId = window.setTimeout(() => {
+      loadMessages().catch(console.error);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [groupId, loadMessages]);
 
   // Load members
   useEffect(() => {
@@ -123,24 +193,59 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   // Real-time subscription
   useEffect(() => {
     if (!groupId) return;
-    const channel = supabase
-      .channel(`group-${groupId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "group_messages", filter: `conversation_id=eq.${groupId}` },
-        (payload) => {
-          const msg = payload.new as GroupMessage;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            return [...prev, msg];
-          });
-          setTimeout(scrollToBottom, 100);
-        }
-      )
-      .subscribe();
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    return () => { supabase.removeChannel(channel); };
-  }, [groupId, scrollToBottom]);
+    async function subscribeToGroupMessages() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        supabase.realtime.setAuth(session.access_token);
+      }
+
+      if (cancelled) return;
+
+      channel = supabase
+        .channel(`group-${groupId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "group_messages", filter: `conversation_id=eq.${groupId}` },
+          (payload) => {
+            const msg = payload.new as GroupMessage;
+            setMessages((prev) => mergeIncomingMessage(prev, msg));
+            setTimeout(scrollToBottom, 100);
+          }
+        )
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            loadMessages().catch(console.error);
+          }
+        });
+    }
+
+    subscribeToGroupMessages().catch(console.error);
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [groupId, loadMessages, scrollToBottom]);
+
+  // Realtime is ideal, but this keeps chats live when Supabase Realtime is delayed
+  // or not enabled for the table in a local/project environment.
+  useEffect(() => {
+    if (!groupId) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadMessages().catch(console.error);
+      }
+    }, GROUP_MESSAGES_POLL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [groupId, loadMessages]);
 
   async function handleSend() {
     if (!newMessage.trim() || sending) return;
@@ -169,7 +274,9 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
       });
       if (res.ok) {
         const real = await res.json();
-        setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? real : m)));
+        setMessages((prev) => mergeIncomingMessage(prev, real));
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
@@ -195,11 +302,17 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
       const { url } = await uploadRes.json();
 
       const messageType = file.type.startsWith("image/") ? "IMAGE" : "PDF";
-      await fetch(`/api/groups/${groupId}/messages`, {
+      const messageRes = await fetch(`/api/groups/${groupId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: file.name, messageType, fileUrl: url }),
       });
+
+      if (messageRes.ok) {
+        const real = await messageRes.json();
+        setMessages((prev) => mergeIncomingMessage(prev, real));
+        setTimeout(scrollToBottom, 100);
+      }
     } catch {
       console.error("Upload failed");
     }

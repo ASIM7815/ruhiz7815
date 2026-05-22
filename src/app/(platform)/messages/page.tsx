@@ -319,6 +319,18 @@ function MessagesPageContent() {
     }
   }, [msgTab, userId, fetchGroupConversations]);
 
+  useEffect(() => {
+    if (msgTab !== "groups" || !userId) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchGroupConversations();
+      }
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [fetchGroupConversations, msgTab, userId]);
+
   // ── Auto-open conversation from URL param ─────────────────────
 
   const didAutoOpen = useRef(false);
@@ -846,7 +858,7 @@ function MessagesPageContent() {
                 </Button>
               </div>
               <div className="flex-1">
-                <GroupChat groupId={selectedGroupId} onBack={() => { setSelectedGroupId(null); setShowMobileChat(false); }} />
+                <GroupChat key={selectedGroupId} groupId={selectedGroupId} onBack={() => { setSelectedGroupId(null); setShowMobileChat(false); }} />
               </div>
             </div>
           ) : selectedConversation && selectedParticipant ? (

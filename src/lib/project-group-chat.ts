@@ -75,3 +75,18 @@ export async function ensureProjectGroupChat({
 
   return conversationId;
 }
+
+export async function getProjectGroupConversationId(projectId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("group_conversations")
+    .select("id")
+    .eq("type", "PROJECT")
+    .eq("entity_id", projectId)
+    .limit(1);
+
+  if (error) {
+    throw new Error(formatSupabaseError("Failed to load project group chat", error));
+  }
+
+  return (data?.[0]?.id as string | undefined) ?? null;
+}

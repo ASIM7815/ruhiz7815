@@ -88,9 +88,9 @@ export default function ProjectsPage() {
       });
   }, [filter]);
 
-  const loadMyProjects = useCallback(async () => {
+  const loadMyProjects = useCallback(async (showSpinner = true) => {
     if (!userId) return;
-    setMyLoading(true);
+    if (showSpinner) setMyLoading(true);
     try {
       const res = await fetch(`/api/projects?owner=me`);
       const data = await res.json();
@@ -104,13 +104,26 @@ export default function ProjectsPage() {
       );
       setMyProjects(withRequests);
     } finally {
-      setMyLoading(false);
+      if (showSpinner) setMyLoading(false);
     }
   }, [userId]);
 
   useEffect(() => {
     if (tab === "mine") loadMyProjects();
   }, [tab, loadMyProjects]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    loadMyProjects(false);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadMyProjects(false);
+      }
+    }, 8000);
+
+    return () => window.clearInterval(intervalId);
+  }, [userId, loadMyProjects]);
 
   const handleRequest = async (projectId: string, requestId: string, action: "accept" | "reject") => {
     setActionLoading(requestId);

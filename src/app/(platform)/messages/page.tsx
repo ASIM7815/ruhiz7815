@@ -88,7 +88,9 @@ interface GroupConversation {
   name: string;
   image_url: string | null;
   source_type: string | null;
+  type?: string | null;
   member_count: number;
+  memberCount?: number;
   last_message: string | null;
   last_message_at: string | null;
 }
@@ -124,6 +126,8 @@ function MessagesPageContent() {
   const userId = user?.id;
   const searchParams = useSearchParams();
   const initialConversation = searchParams.get("conversation");
+  const initialGroup = searchParams.get("group");
+  const initialTab = searchParams.get("tab");
 
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -137,7 +141,9 @@ function MessagesPageContent() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [showMobileChat, setShowMobileChat] = useState(false);
-  const [msgTab, setMsgTab] = useState<"chats" | "groups">("chats");
+  const [msgTab, setMsgTab] = useState<"chats" | "groups">(
+    initialTab === "groups" || initialGroup ? "groups" : "chats"
+  );
   const [groupConversations, setGroupConversations] = useState<GroupConversation[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -319,12 +325,23 @@ function MessagesPageContent() {
   useEffect(() => {
     if (!initialConversation || didAutoOpen.current || loading) return;
     didAutoOpen.current = true;
+    setMsgTab("chats");
     setSelectedConversation(initialConversation);
     setShowMobileChat(true);
     fetchMessages(initialConversation);
     subscribeToConversation(initialConversation);
     fetch(`/api/messages/${initialConversation}/read`, { method: "PATCH" });
   }, [initialConversation, loading, fetchMessages, subscribeToConversation]);
+
+  const didAutoOpenGroup = useRef(false);
+  useEffect(() => {
+    if (!initialGroup || didAutoOpenGroup.current) return;
+    didAutoOpenGroup.current = true;
+    setMsgTab("groups");
+    setSelectedConversation(null);
+    setSelectedGroupId(initialGroup);
+    setShowMobileChat(true);
+  }, [initialGroup]);
 
   // ── Poll conversations (every 5s — less critical than messages) ──
 
@@ -798,7 +815,7 @@ function MessagesPageContent() {
                         </div>
                         <div className="flex items-center justify-between">
                           <p className="text-xs text-muted-foreground truncate">
-                            {gc.last_message || `${gc.member_count} members`}
+                            {gc.last_message || `${gc.member_count ?? gc.memberCount ?? 0} members`}
                           </p>
                           {gc.source_type && (
                             <Badge variant="secondary" className="text-[9px] px-1.5 py-0 ml-1 flex-shrink-0">
@@ -875,11 +892,11 @@ function MessagesPageContent() {
                               "audio"
                             )
                           }
-                        />
+                        >
+                          <Phone className="h-4 w-4" />
+                        </Button>
                       }
-                    >
-                      <Phone className="h-4 w-4" />
-                    </TooltipTrigger>
+                    />
                     <TooltipContent>Start audio call</TooltipContent>
                   </Tooltip>
                   <Tooltip>
@@ -896,18 +913,18 @@ function MessagesPageContent() {
                               "video"
                             )
                           }
-                        />
+                        >
+                          <Video className="h-4 w-4" />
+                        </Button>
                       }
-                    >
-                      <Video className="h-4 w-4" />
-                    </TooltipTrigger>
+                    />
                     <TooltipContent>Start video call</TooltipContent>
                   </Tooltip>
                 </div>
               </div>
 
               {/* Messages */}
-              <ScrollArea className="flex-1 p-4">
+              <div className="flex-1 overflow-y-auto p-4">
                 <div className="space-y-3">
                   {messages.map((msg, idx) => {
                     const isOwn = msg.senderId === userId;
@@ -1047,7 +1064,7 @@ function MessagesPageContent() {
                   })}
                   <div ref={messagesEndRef} />
                 </div>
-              </ScrollArea>
+              </div>
 
               {/* Message Input */}
               <div className="p-4 border-t border-border">
@@ -1062,12 +1079,16 @@ function MessagesPageContent() {
                   />
                   <Tooltip>
                     <TooltipTrigger
-                      className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium h-11 w-11 sm:h-9 sm:w-9 bg-primary text-primary-foreground hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50 shrink-0"
-                      onClick={sendMessage}
-                      disabled={!messageInput.trim()}
-                    >
-                      <Send className="h-4 w-4" />
-                    </TooltipTrigger>
+                      render={
+                        <Button
+                          size="icon"
+                          onClick={sendMessage}
+                          disabled={!messageInput.trim()}
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
                     <TooltipContent>Send message</TooltipContent>
                   </Tooltip>
                 </div>
@@ -1077,12 +1098,19 @@ function MessagesPageContent() {
             /* Empty state */
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
               <div className="rounded-full bg-muted p-6 mb-4">
-                <UserIcon className="h-12 w-12 text-muted-foreground/50" />
+                {msgTab === "groups" ? (
+                  <Users className="h-12 w-12 text-muted-foreground/50" />
+                ) : (
+                  <UserIcon className="h-12 w-12 text-muted-foreground/50" />
+                )}
               </div>
-              <h3 className="text-lg font-semibold mb-1">Your Messages</h3>
+              <h3 className="text-lg font-semibold mb-1">
+                {msgTab === "groups" ? "Project Group Chats" : "Your Messages"}
+              </h3>
               <p className="text-sm text-muted-foreground max-w-sm">
-                Search for a student using their 5-digit UID to start a
-                conversation, or select an existing chat from the left.
+                {msgTab === "groups"
+                  ? "Select a project group from the left to start collaborating with your team."
+                  : "Search for a student using their 5-digit UID to start a conversation, or select an existing chat from the left."}
               </p>
             </div>
           )}

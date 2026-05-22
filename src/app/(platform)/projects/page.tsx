@@ -74,6 +74,7 @@ export default function ProjectsPage() {
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -111,18 +112,28 @@ export default function ProjectsPage() {
     if (tab === "mine") loadMyProjects();
   }, [tab, loadMyProjects]);
 
-  const handleRequest = async (projectId: string, requestId: string, action: "ACCEPTED" | "REJECTED") => {
+  const handleRequest = async (projectId: string, requestId: string, action: "accept" | "reject") => {
     setActionLoading(requestId);
+    setActionError("");
     try {
-      await fetch(`/api/projects/${projectId}/join/${requestId}`, {
+      const res = await fetch(`/api/projects/${projectId}/join/${requestId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: action }),
+        body: JSON.stringify({ action }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error || "Could not process the request.");
+        return;
+      }
       setMyProjects((prev) =>
         prev.map((p) =>
           p.id === projectId
-            ? { ...p, pendingRequests: p.pendingRequests.filter((r) => r.id !== requestId) }
+            ? {
+                ...p,
+                memberCount: action === "accept" ? Math.min(p.memberCount + 1, p.maxMembers) : p.memberCount,
+                pendingRequests: p.pendingRequests.filter((r) => r.id !== requestId),
+              }
             : p
         )
       );
@@ -327,6 +338,11 @@ export default function ProjectsPage() {
           </Card>
         ) : (
           <div className="space-y-6">
+            {actionError && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {actionError}
+              </div>
+            )}
             {myProjects.map((project) => (
               <Card key={project.id} className="overflow-hidden">
                 <CardHeader className="pb-3">
@@ -377,7 +393,7 @@ export default function ProjectsPage() {
                             <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
                               <Button
                                 size="sm"
-                                onClick={() => handleRequest(project.id, req.id, "ACCEPTED")}
+                                onClick={() => handleRequest(project.id, req.id, "accept")}
                                 disabled={actionLoading === req.id}
                                 className="bg-emerald-600 hover:bg-emerald-700"
                               >
@@ -391,7 +407,7 @@ export default function ProjectsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleRequest(project.id, req.id, "REJECTED")}
+                                onClick={() => handleRequest(project.id, req.id, "reject")}
                                 disabled={actionLoading === req.id}
                                 className="border-red-300 text-red-600 hover:bg-red-50"
                               >

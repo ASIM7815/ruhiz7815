@@ -284,51 +284,45 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                 <DialogTitle>Group Members</DialogTitle>
                 <DialogDescription>{memberCount} members</DialogDescription>
               </DialogHeader>
-              {isAdmin ? (
-                <ScrollArea className="max-h-80">
-                  <div className="space-y-2">
-                    {members.map((m) => (
-                      <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={m.user?.image || undefined} />
-                          <AvatarFallback>{m.user?.name?.charAt(0) || "?"}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{m.user?.name}</p>
-                          <div className="flex gap-1">
-                            <Badge variant={m.role === "ADMIN" ? "default" : "secondary"} className="text-[10px] h-4">
-                              {m.role}
-                            </Badge>
-                          </div>
+              <ScrollArea className="max-h-80">
+                <div className="space-y-2">
+                  {members.map((m) => (
+                    <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={m.user?.image || undefined} />
+                        <AvatarFallback>{m.user?.name?.charAt(0) || "?"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{m.user?.name}</p>
+                        <div className="flex gap-1">
+                          <Badge variant={m.role === "ADMIN" ? "default" : "secondary"} className="text-[10px] h-4">
+                            {m.role}
+                          </Badge>
                         </div>
-                        {isAdmin && m.user_id !== user?.id && (
-                          <div className="flex gap-1">
-                            {m.role === "MEMBER" ? (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMakeAdmin(m.user_id)} title="Make Admin">
-                                <Shield className="h-3.5 w-3.5" />
-                              </Button>
-                            ) : (
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveAdmin(m.user_id)} title="Remove Admin">
-                                <ShieldOff className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleToggleMedia(m.user_id, m.can_share_media)} title={m.can_share_media ? "Disable media" : "Enable media"}>
-                              {m.can_share_media ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveMember(m.user_id)} title="Remove">
-                              <UserX className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        )}
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <p className="text-sm text-muted-foreground py-4">
-                  Only admins can view the member list for privacy.
-                </p>
-              )}
+                      {isAdmin && m.user_id !== user?.id && (
+                        <div className="flex gap-1">
+                          {m.role === "MEMBER" ? (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMakeAdmin(m.user_id)} title="Make Admin">
+                              <Shield className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveAdmin(m.user_id)} title="Remove Admin">
+                              <ShieldOff className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleToggleMedia(m.user_id, m.can_share_media)} title={m.can_share_media ? "Disable media" : "Enable media"}>
+                            {m.can_share_media ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveMember(m.user_id)} title="Remove">
+                            <UserX className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </DialogContent>
           </Dialog>
           <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={handleLeaveGroup} title="Leave group">

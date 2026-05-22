@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 // GET /api/groups — list user's group conversations
 export async function GET() {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -55,10 +55,21 @@ export async function GET() {
         .select("id", { count: "exact", head: true })
         .eq("conversation_id", conv.id);
 
+      const sourceType = conv.type ?? conv.source_type ?? null;
+      const sourceId = conv.entity_id ?? conv.source_id ?? null;
+      const memberCount = count || 0;
+      const lastMessageText = lastMsg?.content ?? null;
+      const lastMessageAt = lastMsg?.created_at ?? null;
+
       return {
         ...conv,
+        source_type: sourceType,
+        source_id: sourceId,
         role: roleMap[conv.id],
-        memberCount: count || 0,
+        member_count: memberCount,
+        memberCount,
+        last_message: lastMessageText,
+        last_message_at: lastMessageAt,
         lastMessage: lastMsg || null,
       };
     })

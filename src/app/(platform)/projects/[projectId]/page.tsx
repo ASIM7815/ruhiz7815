@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import {
   ArrowLeft,
+  MessageSquare,
   Users,
   Clock,
   Send,
@@ -49,6 +50,7 @@ interface ProjectDetail {
     uid: string | null;
     role: string;
   }[];
+  viewerStatus?: "none" | "pending" | "member" | "owner";
 }
 
 export default function ProjectDetailPage() {
@@ -67,12 +69,11 @@ export default function ProjectDetailPage() {
       .then((r) => r.json())
       .then((data) => {
         setProject(data);
-        if (userId) {
-          if (data.owner?.id === userId) {
-            setJoinStatus("owner");
-          } else if (data.members?.some((m: { id: string }) => m.id === userId)) {
-            setJoinStatus("member");
-          }
+        if (data.viewerStatus) {
+          setJoinStatus(data.viewerStatus);
+        } else if (userId) {
+          if (data.owner?.id === userId) setJoinStatus("owner");
+          else if (data.members?.some((m: { id: string }) => m.id === userId)) setJoinStatus("member");
         }
         setLoading(false);
       });
@@ -81,12 +82,13 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!userId || !projectId || joinStatus !== "none") return;
     fetch(`/api/projects/${projectId}/join`, { method: "GET" })
-      .then((r) => {
-        if (r.status === 403) {
-          // Not owner, check if we have a pending request by trying to submit a check
-          return null;
-        }
+      .then(async (r) => {
+        if (!r.ok) return null;
         return r.json();
+      })
+      .then((data) => {
+        if (data?.status === "PENDING") setJoinStatus("pending");
+        if (data?.status === "MEMBER" || data?.status === "ACCEPTED") setJoinStatus("member");
       })
       .catch(() => null);
   }, [userId, projectId, joinStatus]);
@@ -230,14 +232,26 @@ export default function ProjectDetailPage() {
           <Card>
             <CardContent className="p-5 space-y-4">
               {joinStatus === "owner" ? (
-                <Button className="w-full" size="lg" variant="outline" disabled>
-                  Your Project
-                </Button>
+                <div className="space-y-2">
+                  <Button className="w-full" size="lg" variant="outline" disabled>
+                    Your Project
+                  </Button>
+                  <Button className="w-full" size="lg" render={<Link href="/messages?tab=groups" />}>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Open Group Chat
+                  </Button>
+                </div>
               ) : joinStatus === "member" ? (
-                <Button className="w-full" size="lg" variant="outline" disabled>
-                  <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
-                  You&apos;re a Member
-                </Button>
+                <div className="space-y-2">
+                  <Button className="w-full" size="lg" variant="outline" disabled>
+                    <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
+                    You&apos;re a Member
+                  </Button>
+                  <Button className="w-full" size="lg" render={<Link href="/messages?tab=groups" />}>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Open Group Chat
+                  </Button>
+                </div>
               ) : joinStatus === "pending" ? (
                 <Button className="w-full" size="lg" variant="outline" disabled>
                   <Clock className="mr-2 h-4 w-4 text-amber-500" />

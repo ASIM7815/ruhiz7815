@@ -7,12 +7,12 @@ import { db } from "@/lib/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/groups/[id]/members — list members (admin sees all, members see count only)
+// GET /api/groups/[id]/members — list members for participants
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -42,16 +42,7 @@ export async function GET(
     return NextResponse.json({ error: "Failed to load members" }, { status: 500 });
   }
 
-  // Only admin can see full member details (privacy)
-  if (myParticipant.role !== "ADMIN") {
-    return NextResponse.json({
-      count: participants?.length || 0,
-      myRole: "MEMBER",
-      members: [],
-    });
-  }
-
-  // For admins, fetch user details for each participant
+  // Fetch user details so group messages can show useful sender names.
   const userIds = (participants || []).map((p) => p.user_id);
   const users = await db.user.findMany({
     where: { id: { in: userIds } },
@@ -66,7 +57,7 @@ export async function GET(
 
   return NextResponse.json({
     count: members.length,
-    myRole: "ADMIN",
+    myRole: myParticipant.role,
     members,
   });
 }
@@ -76,7 +67,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, error, status } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

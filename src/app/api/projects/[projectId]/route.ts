@@ -1,6 +1,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth-helpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params;
+  const viewer = await getCurrentUser();
 
   const project = await db.project.findUnique({
     where: { id: projectId },
@@ -32,6 +34,25 @@ export async function GET(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
+  let viewerStatus: "none" | "pending" | "member" | "owner" = "none";
+
+  if (viewer) {
+    if (project.owner.id === viewer.id) {
+      viewerStatus = "owner";
+    } else if (project.members.some((member) => member.user.id === viewer.id)) {
+      viewerStatus = "member";
+    } else {
+      const request = await db.joinRequest.findUnique({
+        where: { projectId_userId: { projectId, userId: viewer.id } },
+        select: { status: true },
+      });
+
+      if (request?.status === "PENDING") {
+        viewerStatus = "pending";
+      }
+    }
+  }
+
   return NextResponse.json({
     id: project.id,
     title: project.title,
@@ -43,6 +64,7 @@ export async function GET(
     createdAt: project.createdAt.toISOString(),
     skills: project.skills.map((s) => s.skill),
     owner: project.owner,
+    viewerStatus,
     members: project.members.map((m) => ({
       id: m.user.id,
       name: m.user.name,

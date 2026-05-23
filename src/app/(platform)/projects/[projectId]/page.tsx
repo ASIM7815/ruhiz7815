@@ -166,12 +166,9 @@ export default function ProjectDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: joinMessage || undefined }),
       });
-      
-      console.log("Join request response status:", res.status);
-      
+
       if (res.ok) {
         const data = await res.json();
-        console.log("Join request success data:", data);
         if (data.status === "PENDING") {
           setJoinStatus("pending");
           setShowForm(false);
@@ -179,12 +176,13 @@ export default function ProjectDetailPage() {
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        console.log("Join request error data:", data);
-        
-        if (data.error?.includes("already pending") || data.error?.includes("PENDING")) {
+
+        if (res.status === 401) {
+          setJoinError("Please log in to send a join request.");
+        } else if (data.error?.includes("already pending") || data.error?.includes("PENDING")) {
           setJoinStatus("pending");
           setShowForm(false);
-        } else if (data.error?.includes("already a member") || data.error?.includes("Already a member") || data.error?.includes("already accepted")) {
+        } else if (data.error?.includes("already a member") || data.error?.includes("Already a member") || data.error?.includes("already accepted") || data.error?.includes("already accepted")) {
           setJoinStatus("member");
           setShowForm(false);
           await loadProject(false);
@@ -192,8 +190,12 @@ export default function ProjectDetailPage() {
           setJoinStatus("owner");
           setShowForm(false);
           await loadProject(false);
+        } else if (data.error?.includes("already full") || data.error?.includes("full")) {
+          setJoinError("This project team is already full.");
+        } else if (data.error?.includes("completed")) {
+          setJoinError("This project is already completed.");
         } else {
-          setJoinError(data.error || "Could not send join request.");
+          setJoinError(data.error || "Could not send join request. Please try again.");
         }
       }
     } catch (err) {

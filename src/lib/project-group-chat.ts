@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
+import { db } from "@/lib/db";
 
 type EnsureProjectGroupChatArgs = {
   projectId: string;
@@ -49,25 +50,33 @@ export async function ensureProjectGroupChat({
     conversationId = newGroup.id;
   }
 
+  // Get all project members from Prisma
+  const allMembers = await db.projectMember.findMany({
+    where: { projectId },
+    select: { userId: true },
+  });
+
+  // Create participants array for all members
+  const participants = allMembers.map((member) => ({
+    conversation_id: conversationId!,
+    user_id: member.userId,
+    role: member.userId === ownerId ? "ADMIN" : "MEMBER",
+    can_share_media: true,
+  }));
+
+  // Ensure the newly added member is included (in case of race condition)
+  if (!participants.some((p) => p.user_id === memberId)) {
+    participants.push({
+      conversation_id: conversationId!,
+      user_id: memberId,
+      role: memberId === ownerId ? "ADMIN" : "MEMBER",
+      can_share_media: true,
+    });
+  }
+
   const { error: participantError } = await supabaseAdmin
     .from("group_participants")
-    .upsert(
-      [
-        {
-          conversation_id: conversationId,
-          user_id: ownerId,
-          role: "ADMIN",
-          can_share_media: true,
-        },
-        {
-          conversation_id: conversationId,
-          user_id: memberId,
-          role: memberId === ownerId ? "ADMIN" : "MEMBER",
-          can_share_media: true,
-        },
-      ],
-      { onConflict: "conversation_id,user_id" }
-    );
+    .upsert(participants, { onConflict: "conversation_id,user_id" });
 
   if (participantError) {
     throw new Error(formatSupabaseError("Failed to add project group participants", participantError));

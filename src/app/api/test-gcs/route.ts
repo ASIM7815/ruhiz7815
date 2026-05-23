@@ -1,102 +1,49 @@
 import { NextResponse } from "next/server";
-import { Storage } from "@google-cloud/storage";
+import { S3Client, ListBucketsCommand, HeadBucketCommand } from "@aws-sdk/client-s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const results: any = {
+  const results: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
-    checks: {},
+    checks: {} as Record<string, unknown>,
+  };
+  const checks = results.checks as Record<string, unknown>;
+
+  // 1. Check env vars
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucketName = process.env.R2_BUCKET_NAME || "ruhiz";
+
+  checks.envVars = {
+    R2_ACCOUNT_ID: accountId ? "Set" : "Missing",
+    R2_ACCESS_KEY_ID: accessKeyId ? "Set" : "Missing",
+    R2_SECRET_ACCESS_KEY: secretAccessKey ? "Set" : "Missing",
+    R2_BUCKET_NAME: bucketName,
   };
 
-  // Check 1: Environment variables
-  results.checks.envVars = {
-    GCS_BUCKET_NAME: process.env.GCS_BUCKET_NAME ? "✓ Set" : "✗ Missing",
-    GCS_CREDENTIALS: process.env.GCS_CREDENTIALS ? "✓ Set" : "✗ Missing",
-    credentialsLength: process.env.GCS_CREDENTIALS?.length || 0,
-  };
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    return NextResponse.json({ ...results, error: "Missing R2 env vars" }, { status: 500 });
+  }
 
-  // Check 2: Parse credentials
+  // 2. Test R2 connection
   try {
-    if (process.env.GCS_CREDENTIALS) {
-      const creds = JSON.parse(process.env.GCS_CREDENTIALS);
-      results.checks.credentials = {
-        status: "✓ Valid JSON",
-        projectId: creds.project_id,
-        clientEmail: creds.client_email,
-        hasPrivateKey: !!creds.private_key,
-        privateKeyFormat: creds.private_key?.substring(0, 30) + "...",
-      };
-    } else {
-      results.checks.credentials = { status: "✗ No credentials" };
-    }
-  } catch (error) {
-    results.checks.credentials = {
-      status: "✗ Invalid JSON",
+    const client = new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId, secretAccessKey },
+    });
+
+    await client.send(new HeadBucketCommand({ Bucket: bucketName }));
+    checks.bucket = { status: "Bucket accessible", bucketName };
+  } catch (error: unknown) {
+    checks.bucket = {
+      status: "Error",
       error: error instanceof Error ? error.message : String(error),
     };
   }
 
-  // Check 3: Initialize Storage
-  try {
-    let storage: Storage;
-    
-    if (process.env.GCS_CREDENTIALS) {
-      const credentials = JSON.parse(process.env.GCS_CREDENTIALS);
-      
-      // Fix private key format
-      if (credentials.private_key && credentials.private_key.includes('\\n')) {
-        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-      }
-      
-      storage = new Storage({ 
-        credentials,
-        projectId: credentials.project_id 
-      });
-      
-      results.checks.storageInit = {
-        status: "✓ Storage initialized",
-        projectId: credentials.project_id,
-      };
-    } else {
-      throw new Error("No credentials available");
-    }
-
-    // Check 4: Test bucket access
-    const bucketName = process.env.GCS_BUCKET_NAME || "ruhiz";
-    const bucket = storage.bucket(bucketName);
-    
-    try {
-      const [exists] = await bucket.exists();
-      results.checks.bucketAccess = {
-        status: exists ? "✓ Bucket exists" : "✗ Bucket not found",
-        bucketName,
-      };
-
-      if (exists) {
-        // Try to get bucket metadata
-        const [metadata] = await bucket.getMetadata();
-        results.checks.bucketMetadata = {
-          status: "✓ Can read metadata",
-          location: metadata.location,
-          storageClass: metadata.storageClass,
-        };
-      }
-    } catch (bucketError) {
-      results.checks.bucketAccess = {
-        status: "✗ Bucket access failed",
-        bucketName,
-        error: bucketError instanceof Error ? bucketError.message : String(bucketError),
-      };
-    }
-
-  } catch (error) {
-    results.checks.storageInit = {
-      status: "✗ Failed to initialize",
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-
-  return NextResponse.json(results, { status: 200 });
+  return NextResponse.json(results);
 }

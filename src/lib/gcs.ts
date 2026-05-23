@@ -1,59 +1,40 @@
-import { Storage } from "@google-cloud/storage";
-import path from "path";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl as awsGetSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// Folder structure for organized storage
 export const GCS_FOLDERS = {
   KNOWLEDGE_HUB: "knowledge-hub",
-  GROUP_CHAT: "group-chat",
-  MARKETPLACE: "marketplace",
-  PROFILES: "profiles",
-  PROJECTS: "projects",
+  GROUP_CHAT:    "group-chat",
+  MARKETPLACE:   "marketplace",
+  PROFILES:      "profiles",
+  PROJECTS:      "projects",
 } as const;
 
-// Lazy singleton — initialized on first use, NOT at module load time.
-// This prevents module-level crashes that would make ALL routes return 500.
-let _storage: Storage | null = null;
+let _r2: S3Client | null = null;
 
-function getStorage(): Storage {
-  if (_storage) return _storage;
-
-  const credentialsEnv = process.env.GCS_CREDENTIALS;
-
-  if (credentialsEnv) {
-    let credentials: Record<string, unknown>;
-    try {
-      credentials = JSON.parse(credentialsEnv);
-    } catch {
-      throw new Error("[GCS] GCS_CREDENTIALS is not valid JSON");
-    }
-
-    // Vercel stores env vars as single-line strings — replace literal \n in private key
-    if (typeof credentials.private_key === "string" && credentials.private_key.includes("\\n")) {
-      credentials.private_key = credentials.private_key.replace(/\\n/g, "\n");
-    }
-
-    console.log("[GCS] Initializing with credentials for project:", credentials.project_id);
-    _storage = new Storage({ credentials, projectId: credentials.project_id as string });
-    console.log("[GCS] Storage initialized successfully");
-  } else {
-    // Local dev fallback: use googlebucket.json keyfile
-    console.log("[GCS] No GCS_CREDENTIALS env var — using local keyfile");
-    const keyFilePath = path.join(process.cwd(), "googlebucket.json");
-    _storage = new Storage({ keyFilename: keyFilePath });
-    console.log("[GCS] Storage initialized with keyfile");
+export function getR2Client(): S3Client {
+  if (_r2) return _r2;
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    throw new Error("[R2] Missing env vars: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY");
   }
-
-  return _storage;
+  _r2 = new S3Client({
+    region: "auto",
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: { accessKeyId, secretAccessKey },
+  });
+  return _r2;
 }
 
-function getBucket() {
-  const bucketName = process.env.GCS_BUCKET_NAME || "ruhiz";
-  return getStorage().bucket(bucketName);
-}
+const getBucketName = () => process.env.R2_BUCKET_NAME || "ruhiz";
 
-/**
- * Upload file to GCS with organized folder structure
- */
 export async function uploadToGCS(
   buffer: Buffer,
   fileName: string,
@@ -61,79 +42,59 @@ export async function uploadToGCS(
   folder: keyof typeof GCS_FOLDERS,
   userId?: string
 ): Promise<string> {
-  const bucket = getBucket();
-
   const timestamp = Date.now();
-  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const sanitized = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
   const folderPath = GCS_FOLDERS[folder];
-  const filePath = userId
-    ? `${folderPath}/${userId}/${timestamp}-${sanitizedFileName}`
-    : `${folderPath}/${timestamp}-${sanitizedFileName}`;
-
-  const file = bucket.file(filePath);
-
-  await file.save(buffer, {
-    contentType,
-    resumable: false,
-    metadata: {
-      cacheControl: "public, max-age=31536000",
-    },
-  });
-
-  return `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+  const key = userId
+    ? `${folderPath}/${userId}/${timestamp}-${sanitized}`
+    : `${folderPath}/${timestamp}-${sanitized}`;
+  await getR2Client().send(
+    new PutObjectCommand({
+      Bucket: getBucketName(),
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      CacheControl: "public, max-age=31536000",
+    })
+  );
+  return `/api/r2/${key}`;
 }
 
-/**
- * Delete file from GCS. Does not throw if the file is already gone.
- */
-export async function deleteFromGCS(filePath: string): Promise<void> {
+export async function deleteFromGCS(filePathOrUrl: string): Promise<void> {
+  const key = extractGCSPath(filePathOrUrl) ?? filePathOrUrl;
   try {
-    await getBucket().file(filePath).delete();
+    await getR2Client().send(
+      new DeleteObjectCommand({ Bucket: getBucketName(), Key: key })
+    );
   } catch (error) {
-    console.error("[GCS] Error deleting file:", error);
+    console.error("[R2] Error deleting file:", error);
   }
 }
 
-/**
- * Extract the GCS object path from a full public URL.
- * Returns null if the URL doesn't belong to this bucket.
- */
 export function extractGCSPath(url: string): string | null {
-  const bucketName = process.env.GCS_BUCKET_NAME || "ruhiz";
-  const prefix = `https://storage.googleapis.com/${bucketName}/`;
-  if (url.startsWith(prefix)) {
-    return url.slice(prefix.length);
-  }
+  if (url.startsWith("/api/r2/")) return url.slice("/api/r2/".length);
+  const gcsPrefix = `https://storage.googleapis.com/${getBucketName()}/`;
+  if (url.startsWith(gcsPrefix)) return url.slice(gcsPrefix.length);
   return null;
 }
 
-/**
- * Get a signed URL for temporary access (for private files).
- */
-export async function getSignedUrl(filePath: string, expiresInMinutes = 60): Promise<string> {
-  const bucket = getBucket();
-  const [url] = await bucket.file(filePath).getSignedUrl({
-    action: "read",
-    expires: Date.now() + expiresInMinutes * 60 * 1000,
-  });
-  return url;
+export async function getSignedUrl(filePathOrUrl: string, expiresInMinutes = 60): Promise<string> {
+  const key = extractGCSPath(filePathOrUrl) ?? filePathOrUrl;
+  const command = new GetObjectCommand({ Bucket: getBucketName(), Key: key });
+  return awsGetSignedUrl(getR2Client(), command, { expiresIn: expiresInMinutes * 60 });
 }
 
-/**
- * List files in a specific folder.
- */
 export async function listFiles(folder: keyof typeof GCS_FOLDERS, userId?: string) {
-  const bucket = getBucket();
   const prefix = userId
     ? `${GCS_FOLDERS[folder]}/${userId}/`
     : `${GCS_FOLDERS[folder]}/`;
-
-  const [files] = await bucket.getFiles({ prefix });
-  return files.map((file) => ({
-    name: file.name,
-    url: `https://storage.googleapis.com/${bucket.name}/${file.name}`,
-    size: file.metadata.size,
-    contentType: file.metadata.contentType,
-    created: file.metadata.timeCreated,
+  const response = await getR2Client().send(
+    new ListObjectsV2Command({ Bucket: getBucketName(), Prefix: prefix })
+  );
+  return (response.Contents ?? []).map((obj) => ({
+    name: obj.Key ?? "",
+    url: `/api/r2/${obj.Key}`,
+    size: obj.Size,
+    created: obj.LastModified?.toISOString(),
   }));
 }

@@ -20,8 +20,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Ensure Prisma client, PostgreSQL adapter, and GCS are not bundled (use native Node.js modules)
-  serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg", "@google-cloud/storage"],
+  // Ensure Prisma client and PostgreSQL adapter are not bundled (AWS SDK v3 is fine to bundle)
+  serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
   
   // Optimize for production
   experimental: {

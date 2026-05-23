@@ -190,8 +190,8 @@ function MessagesPageContent() {
     onCallMessage: handleCallMessage,
   });
 
-  const fetchGroupConversations = useCallback(async () => {
-    setGroupsLoading(true);
+  const fetchGroupConversations = useCallback(async (silent = false) => {
+    if (!silent) setGroupsLoading(true);
     try {
       const res = await fetch("/api/groups");
       if (res.ok) {
@@ -201,7 +201,7 @@ function MessagesPageContent() {
     } catch {
       // silently fail
     } finally {
-      setGroupsLoading(false);
+      if (!silent) setGroupsLoading(false);
     }
   }, []);
 
@@ -324,7 +324,7 @@ function MessagesPageContent() {
 
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === "visible") {
-        fetchGroupConversations();
+        fetchGroupConversations(true); // silent — no loading flash
       }
     }, 5000);
 

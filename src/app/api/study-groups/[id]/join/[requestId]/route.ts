@@ -88,12 +88,12 @@ export async function PATCH(
   let conversationId: string | null = null;
   if (group) {
     try {
-      conversationId = await ensureStudyGroupChat({
+      conversationId = (await ensureStudyGroupChat({
         groupId,
         groupName: group.name,
         leaderId: user.id,
         memberId: joinReq.userId,
-      });
+      })) ?? null;
     } catch (err) {
       console.error("[study-group-chat] Failed to sync group chat:", err);
     }

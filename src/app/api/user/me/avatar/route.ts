@@ -30,15 +30,15 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "File too large (max 2MB)" }, { status: 400 });
     }
 
-    // Delete old avatar if it's a GCS URL (best-effort, don't fail upload if this errors)
+    // Delete old avatar if it's stored in R2 or legacy GCS (best-effort)
     try {
       const currentUser = await db.user.findUnique({
         where: { id: user.id },
         select: { image: true },
       });
-      if (currentUser?.image?.includes("storage.googleapis.com")) {
-        const oldPath = currentUser.image.split(`/${process.env.GCS_BUCKET_NAME || "ruhiz"}/`)[1];
-        if (oldPath) await deleteFromGCS(oldPath);
+      const oldImg = currentUser?.image;
+      if (oldImg && (oldImg.startsWith("/api/r2/") || oldImg.includes("storage.googleapis.com"))) {
+        await deleteFromGCS(oldImg);
       }
     } catch (deleteErr) {
       console.warn("[avatar] Failed to delete old avatar:", deleteErr);

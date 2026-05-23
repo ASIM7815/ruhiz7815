@@ -29,8 +29,10 @@ import {
   UserX,
   Lock,
   Unlock,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const GROUP_MESSAGES_POLL_MS = 2500;
 
@@ -122,6 +124,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   const [showMembers, setShowMembers] = useState(false);
   const [sending, setSending] = useState(false);
   const [userNames, setUserNames] = useState<Record<string, { name: string; image: string | null }>>({});
+  const [uploadingFile, setUploadingFile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<GroupMessage[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -288,6 +291,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setUploadingFile(true);
     const formData = new FormData();
     formData.append("file", file);
     formData.append("type", "groupChat");
@@ -296,7 +300,8 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
     try {
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
       if (!uploadRes.ok) {
-        console.error("Upload failed");
+        const err = await uploadRes.json().catch(() => ({}));
+        toast.error(err.error || "File upload failed. Please try again.");
         return;
       }
       const { url } = await uploadRes.json();
@@ -312,11 +317,16 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
         const real = await messageRes.json();
         setMessages((prev) => mergeIncomingMessage(prev, real));
         setTimeout(scrollToBottom, 100);
+        toast.success("File shared successfully!");
+      } else {
+        toast.error("File uploaded but failed to send as message.");
       }
     } catch {
-      console.error("Upload failed");
+      toast.error("Upload failed. Check your connection and try again.");
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   async function handleLeaveGroup() {
@@ -525,8 +535,20 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
             onChange={handleFileUpload}
           />
           {(isAdmin || group?.canShareMedia) && (
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => fileInputRef.current?.click()}>
-              <ImageIcon className="h-4 w-4" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingFile}
+              title={uploadingFile ? "Uploading..." : "Share file"}
+            >
+              {uploadingFile ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ImageIcon className="h-4 w-4" />
+              )}
             </Button>
           )}
           <Input

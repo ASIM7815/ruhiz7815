@@ -131,10 +131,14 @@ export default function MarketplacePage() {
       formData.append("file", file);
       formData.append("type", "marketplace");
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-      if (uploadRes.ok) {
-        const data = await uploadRes.json();
-        imageUrl = data.url;
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        toast.error(err.error || "Image upload failed. Please try again.");
+        setCreating(false);
+        return;
       }
+      const data = await uploadRes.json();
+      imageUrl = data.url;
     }
 
     const res = await fetch("/api/marketplace", {

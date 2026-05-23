@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
-import { supabaseAdmin as supabase } from "@/lib/supabase-server";
+import { ensureStudyGroupChat } from "@/lib/study-group-chat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,21 +11,35 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; requestId: string }> }
 ) {
-  const { user, error, status: authStatus } = await requireAuth();
+  const { user, error } = await requireAuth();
   if (error || !user) {
-    return NextResponse.json({ error }, { status: authStatus });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id, requestId } = await params;
-  const { status } = await req.json();
+  const { id: groupId, requestId } = await params;
+  const body = await req.json().catch(() => ({}));
 
-  if (!["ACCEPTED", "REJECTED"].includes(status)) {
-    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  // Accept both { status: "ACCEPTED" } and { action: "accept" } formats
+  const raw =
+    typeof body.action === "string"
+      ? body.action.toLowerCase()
+      : typeof body.status === "string"
+      ? body.status.toLowerCase()
+      : "";
+  const action =
+    raw === "accept" || raw === "accepted"
+      ? "ACCEPTED"
+      : raw === "reject" || raw === "rejected"
+      ? "REJECTED"
+      : null;
+
+  if (!action) {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
-  // Verify leader
+  // Verify the caller is the group leader
   const membership = await db.studyGroupMember.findUnique({
-    where: { groupId_userId: { groupId: id, userId: user.id } },
+    where: { groupId_userId: { groupId, userId: user.id } },
   });
   if (!membership || membership.role !== "LEADER") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -34,70 +48,65 @@ export async function PATCH(
   const joinReq = await db.studyGroupJoinRequest.findUnique({
     where: { id: requestId },
   });
-  if (!joinReq || joinReq.groupId !== id) {
+  if (!joinReq || joinReq.groupId !== groupId) {
     return NextResponse.json({ error: "Request not found" }, { status: 404 });
   }
-
-  await db.studyGroupJoinRequest.update({
-    where: { id: requestId },
-    data: { status },
-  });
-
-  if (status === "ACCEPTED") {
-    // Add member
-    await db.studyGroupMember.create({
-      data: { groupId: id, userId: joinReq.userId },
-    });
-
-    // Auto-create or add to Supabase group
-    const group = await db.studyGroup.findUnique({ where: { id } });
-    if (group) {
-      // Check if group conversation exists
-      const { data: existingConv } = await supabase
-        .from("group_conversations")
-        .select("id")
-        .eq("source_type", "study_group")
-        .eq("source_id", id)
-        .single();
-
-      let convId: string;
-
-      if (existingConv) {
-        convId = existingConv.id;
-      } else {
-        // Create group conversation
-        const { data: newConv } = await supabase
-          .from("group_conversations")
-          .insert({
-            name: group.name,
-            created_by: user.id,
-            source_type: "study_group",
-            source_id: id,
-          })
-          .select("id")
-          .single();
-
-        if (!newConv) {
-          return NextResponse.json({ error: "Failed to create group chat" }, { status: 500 });
-        }
-        convId = newConv.id;
-
-        // Add leader as admin
-        await supabase.from("group_participants").insert({
-          conversation_id: convId,
-          user_id: user.id,
-          role: "admin",
-        });
-      }
-
-      // Add accepted user
-      await supabase.from("group_participants").insert({
-        conversation_id: convId,
-        user_id: joinReq.userId,
-        role: "member",
-      });
-    }
+  if (joinReq.status !== "PENDING") {
+    return NextResponse.json({ error: "Request already processed" }, { status: 400 });
   }
 
-  return NextResponse.json({ success: true });
+  const group = await db.studyGroup.findUnique({ where: { id: groupId } });
+
+  // Update the request status
+  await db.studyGroupJoinRequest.update({
+    where: { id: requestId },
+    data: { status: action },
+  });
+
+  if (action === "REJECTED") {
+    if (group) {
+      await db.notification.create({
+        data: {
+          userId: joinReq.userId,
+          type: "STUDY_GROUP_JOIN_REJECTED",
+          title: "Study group request declined",
+          message: `Your request to join "${group.name}" was declined.`,
+        },
+      });
+    }
+    return NextResponse.json({ success: true, status: "REJECTED" });
+  }
+
+  // ACCEPTED — add the user as a member
+  await db.studyGroupMember.upsert({
+    where: { groupId_userId: { groupId, userId: joinReq.userId } },
+    update: {},
+    create: { groupId, userId: joinReq.userId, role: "MEMBER" },
+  });
+
+  // Create / update the group conversation in Messages
+  let conversationId: string | null = null;
+  if (group) {
+    try {
+      conversationId = await ensureStudyGroupChat({
+        groupId,
+        groupName: group.name,
+        leaderId: user.id,
+        memberId: joinReq.userId,
+      });
+    } catch (err) {
+      console.error("[study-group-chat] Failed to sync group chat:", err);
+    }
+
+    await db.notification.create({
+      data: {
+        userId: joinReq.userId,
+        type: "STUDY_GROUP_JOIN_ACCEPTED",
+        title: "Study group request approved",
+        message: `You\'ve been accepted into "${group.name}". The group chat is now available in Messages.`,
+      },
+    });
+  }
+
+  return NextResponse.json({ success: true, status: "ACCEPTED", conversationId });
 }

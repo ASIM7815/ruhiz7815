@@ -132,6 +132,11 @@ export default function MarketplacePage() {
 
   async function handleCreate() {
     if (!form.title || !form.price || !form.category) return;
+    if (!file) {
+      toast.error("Please upload a product image.");
+      return;
+    }
+
     const price = Number(form.price);
     if (!Number.isFinite(price) || price < 0) {
       toast.error("Enter a valid price.");
@@ -178,12 +183,12 @@ export default function MarketplacePage() {
     setContactingId(listingId);
     try {
       const res = await fetch(`/api/marketplace/${listingId}/contact`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast.success("Message sent to seller! Redirecting to messages...");
-        setTimeout(() => router.push("/messages"), 1000);
+        toast.success("Chat opened with the seller.");
+        router.push(`/messages?conversation=${encodeURIComponent(data.conversationId)}`);
       } else {
-        const err = await res.json();
-        toast.error(err.error || "Failed to contact seller.");
+        toast.error(data.error || "Failed to contact seller.");
       }
     } finally {
       setContactingId(null);
@@ -516,14 +521,15 @@ export default function MarketplacePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Image (optional)</Label>
+              <Label>Product image</Label>
               <Input
                 type="file"
                 accept="image/*"
+                required
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
               />
             </div>
-            <Button onClick={handleCreate} className="w-full" disabled={creating || !form.title || !form.price}>
+            <Button onClick={handleCreate} className="w-full" disabled={creating || !form.title || !form.price || !file}>
               {creating ? "Listing..." : "List Item"}
             </Button>
           </div>

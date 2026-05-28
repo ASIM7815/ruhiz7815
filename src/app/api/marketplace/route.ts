@@ -194,6 +194,10 @@ export async function POST(req: NextRequest) {
     return input;
   }
 
+  if (!imageFile && !input.imageUrl) {
+    return NextResponse.json({ error: "Product image is required" }, { status: 400 });
+  }
+
   let uploadedImageUrl: string | null = null;
 
   if (imageFile) {

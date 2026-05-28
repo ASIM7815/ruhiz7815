@@ -86,18 +86,27 @@ export default function MarketplacePage() {
     condition: "GOOD",
   });
 
-  useEffect(() => {
+  const loadListings = useCallback(async (nextFilter = filter) => {
     const params = new URLSearchParams();
-    if (filter === "Books") params.set("category", "BOOK");
-    if (filter === "Gadgets") params.set("category", "GADGET");
-    if (filter === "Services") params.set("category", "SERVICE");
-    fetch(`/api/marketplace?${params}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setListings(data.listings || []);
-        setLoading(false);
-      });
+    if (nextFilter === "Books") params.set("category", "BOOK");
+    if (nextFilter === "Gadgets") params.set("category", "GADGET");
+    if (nextFilter === "Services") params.set("category", "SERVICE");
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/marketplace?${params}`);
+      const data = await res.json();
+      setListings(data.listings || []);
+    } catch {
+      toast.error("Failed to load listings.");
+    } finally {
+      setLoading(false);
+    }
   }, [filter]);
+
+  useEffect(() => {
+    loadListings();
+  }, [loadListings]);
 
   const loadMyListings = useCallback(async () => {
     if (!userId) return;
@@ -123,44 +132,46 @@ export default function MarketplacePage() {
 
   async function handleCreate() {
     if (!form.title || !form.price || !form.category) return;
+    const price = Number(form.price);
+    if (!Number.isFinite(price) || price < 0) {
+      toast.error("Enter a valid price.");
+      return;
+    }
+
     setCreating(true);
 
-    let imageUrl: string | null = null;
-    if (file) {
+    try {
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("type", "marketplace");
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json().catch(() => ({}));
-        toast.error(err.error || "Image upload failed. Please try again.");
-        setCreating(false);
-        return;
+      formData.append("title", form.title.trim());
+      formData.append("description", form.description.trim());
+      formData.append("price", form.price);
+      formData.append("category", form.category);
+      formData.append("condition", form.condition);
+      if (file) formData.append("image", file);
+
+      const res = await fetch("/api/marketplace", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        toast.success("Listing created!");
+        setShowCreate(false);
+        setForm({ title: "", description: "", price: "", category: "BOOK", condition: "GOOD" });
+        setFile(null);
+        setTab("browse");
+        setFilter("All");
+        await loadListings("All");
+        await loadMyListings();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to create listing.");
       }
-      const data = await uploadRes.json();
-      imageUrl = data.url;
-    }
-
-    const res = await fetch("/api/marketplace", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, imageUrl }),
-    });
-
-    if (res.ok) {
-      toast.success("Listing created!");
-      setShowCreate(false);
-      setForm({ title: "", description: "", price: "", category: "BOOK", condition: "GOOD" });
-      setFile(null);
-      const params = new URLSearchParams();
-      if (filter !== "All") params.set("category", filter === "Books" ? "BOOK" : filter === "Gadgets" ? "GADGET" : "SERVICE");
-      const listRes = await fetch(`/api/marketplace?${params}`);
-      const data = await listRes.json();
-      setListings(data.listings || []);
-    } else {
+    } catch {
       toast.error("Failed to create listing.");
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   }
 
   async function handleContact(listingId: string) {

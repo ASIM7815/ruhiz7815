@@ -9,6 +9,7 @@ import { getSignedUrl as awsGetSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const GCS_FOLDERS = {
   KNOWLEDGE_HUB: "knowledge-hub",
+  DIRECT_MESSAGES: "direct-messages",
   GROUP_CHAT:    "group-chat",
   MARKETPLACE:   "marketplace",
   PROFILES:      "profiles",

@@ -169,6 +169,10 @@
   .mobile-chat-open .mobile-bottom-nav {
     display: none;
   }
+
+  .mobile-chat-open .platform-main {
+    padding-bottom: 0;
+  }
 }
 
 /* ── Gen-Z Styling ── */

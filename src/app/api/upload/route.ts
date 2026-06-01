@@ -34,6 +34,7 @@ const LIMITS: Record<string, number> = {
   project: 10 * 1024 * 1024,      // 10MB for project files
   knowledge: 10 * 1024 * 1024,    // 10MB for knowledge hub
   marketplace: 5 * 1024 * 1024,   // 5MB for marketplace images
+  directMessage: 10 * 1024 * 1024, // 10MB for direct message files
   groupChat: 10 * 1024 * 1024,    // 10MB for group chat files
 };
 
@@ -41,6 +42,15 @@ const LIMITS: Record<string, number> = {
 const ALLOWED_TYPES: Record<string, string[]> = {
   avatar: ["image/jpeg", "image/png", "image/gif", "image/webp"],
   marketplace: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+  directMessage: [
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+    "application/pdf", "application/zip",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+  ],
   groupChat: [
     "image/jpeg", "image/png", "image/gif", "image/webp",
     "application/pdf",
@@ -73,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
-  const type = formData.get("type") as string | null; // avatar, project, knowledge, marketplace, groupChat
+  const type = formData.get("type") as string | null; // avatar, project, knowledge, marketplace, directMessage, groupChat
   const entityId = formData.get("entityId") as string | null; // optional: projectId, groupId, etc.
 
   if (!file || !type || !LIMITS[type]) {
@@ -109,6 +119,9 @@ export async function POST(req: NextRequest) {
     case "marketplace":
       folder = "MARKETPLACE";
       break;
+    case "directMessage":
+      folder = "DIRECT_MESSAGES";
+      break;
     case "groupChat":
       folder = "GROUP_CHAT";
       break;
@@ -129,7 +142,7 @@ export async function POST(req: NextRequest) {
       url,
     });
 
-    return NextResponse.json({ url, fileName: file.name, size: file.size });
+    return NextResponse.json({ url, fileName: file.name, size: file.size, mimeType });
   } catch (uploadError) {
     console.error("[Upload] Error uploading file:", uploadError);
     return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });

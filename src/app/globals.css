@@ -49,6 +49,7 @@
 }
 
 :root {
+  --mobile-nav-height: 4.75rem;
   --background: oklch(0.995 0 0);
   --foreground: oklch(0.145 0.014 285.823);
   --card: oklch(1 0 0);
@@ -126,6 +127,47 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  .mobile-tabs {
+    @apply flex w-full gap-1 rounded-lg bg-muted p-1 sm:w-fit;
+  }
+
+  .mobile-tab-button {
+    @apply min-h-10 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors sm:min-h-8 sm:flex-none sm:px-4;
+  }
+
+  .mobile-primary-action {
+    @apply min-h-11 w-full sm:min-h-8 sm:w-auto;
+  }
+
+  .mobile-filter-scroll {
+    @apply -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0;
+    scrollbar-width: none;
+  }
+
+  .mobile-filter-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-chip {
+    @apply min-h-8 shrink-0 cursor-pointer px-4 py-1.5 text-xs;
+  }
+
+  .mobile-empty-card {
+    @apply px-4 py-10 text-center sm:p-12;
+  }
+
+  .mobile-card-grid {
+    @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-3;
+  }
+}
+
+@media (max-width: 1023px) {
+  .mobile-chat-open .mobile-bottom-nav {
+    display: none;
   }
 }
 

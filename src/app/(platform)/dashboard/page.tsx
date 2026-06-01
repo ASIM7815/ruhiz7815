@@ -168,20 +168,20 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.title} className="border-border/50 bg-card/80 backdrop-blur-sm hover:border-primary/30 transition-all">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex min-h-[7.5rem] flex-col justify-between gap-3 sm:min-h-0 sm:flex-row sm:items-center">
                 <div>
-                  <p className="text-sm text-muted-foreground">{stat.title}</p>
-                  <p className="text-3xl font-bold font-heading mt-1">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground sm:text-sm">{stat.title}</p>
+                  <p className="text-2xl font-bold font-heading mt-1 sm:text-3xl">{stat.value}</p>
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <TrendingUp className="h-3 w-3 text-emerald-400" />
                     {stat.change}
                   </p>
                 </div>
-                <div className={`${stat.bg} p-3 rounded-xl`}>
+                <div className={`${stat.bg} self-end rounded-xl p-2.5 sm:self-auto sm:p-3`}>
                   <stat.icon className={`h-5 w-5 ${stat.color}`} />
                 </div>
               </div>
@@ -201,7 +201,7 @@ export default function DashboardPage() {
             <CardDescription>Sent vs Received (last 7 days)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ReactECharts option={weeklyActivityOption} style={{ height: 220 }} opts={{ renderer: "svg" }} />
+            <ReactECharts option={weeklyActivityOption} className="h-[210px] sm:h-[220px]" opts={{ renderer: "svg" }} />
           </CardContent>
         </Card>
 
@@ -211,7 +211,7 @@ export default function DashboardPage() {
             <CardDescription>Based on your activity</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
-            <ReactECharts option={gaugeOption} style={{ height: 220, width: "100%" }} opts={{ renderer: "svg" }} />
+            <ReactECharts option={gaugeOption} className="h-[210px] w-full sm:h-[220px]" opts={{ renderer: "svg" }} />
           </CardContent>
         </Card>
       </div>
@@ -224,7 +224,7 @@ export default function DashboardPage() {
             <CardDescription>Where you spend your time</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
-            <ReactECharts option={categoryOption} style={{ height: 220, width: "100%" }} opts={{ renderer: "svg" }} />
+            <ReactECharts option={categoryOption} className="h-[210px] w-full sm:h-[220px]" opts={{ renderer: "svg" }} />
           </CardContent>
           <CardContent className="pt-0">
             <div className="grid grid-cols-2 gap-2">

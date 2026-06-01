@@ -8,13 +8,11 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipContent,
@@ -199,53 +197,32 @@ export function Sidebar() {
     .toUpperCase();
 
   return (
-    <>
-      {/* Desktop sidebar */}
-      <aside
-        className={cn(
-          "hidden lg:flex flex-col border-r bg-card/50 transition-all duration-300 shrink-0",
-          collapsed ? "w-[68px]" : "w-64"
-        )}
-      >
-        <div className="flex flex-col h-full relative">
-          <SidebarNavItems
-            collapsed={collapsed}
-            pathname={pathname}
-            userEmail={userEmail}
-            userImage={userImage}
-            userInitials={userInitials}
-            userName={userName}
-          />
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-muted transition-colors"
-          >
-            {collapsed ? (
-              <ChevronRight className="h-3 w-3" />
-            ) : (
-              <ChevronLeft className="h-3 w-3" />
-            )}
-          </button>
-        </div>
-      </aside>
-
-      {/* Mobile sidebar */}
-      <Sheet>
-        <SheetTrigger render={<Button variant="ghost" size="icon" className="lg:hidden fixed top-3 left-3 z-40" />}>
-          <Menu className="h-5 w-5" />
-        </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-64">
-          <SidebarNavItems
-            collapsed={collapsed}
-            mobile
-            pathname={pathname}
-            userEmail={userEmail}
-            userImage={userImage}
-            userInitials={userInitials}
-            userName={userName}
-          />
-        </SheetContent>
-      </Sheet>
-    </>
+    <aside
+      className={cn(
+        "hidden lg:flex flex-col border-r bg-card/50 transition-all duration-300 shrink-0",
+        collapsed ? "w-[68px]" : "w-64"
+      )}
+    >
+      <div className="flex flex-col h-full relative">
+        <SidebarNavItems
+          collapsed={collapsed}
+          pathname={pathname}
+          userEmail={userEmail}
+          userImage={userImage}
+          userInitials={userInitials}
+          userName={userName}
+        />
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-muted transition-colors"
+        >
+          {collapsed ? (
+            <ChevronRight className="h-3 w-3" />
+          ) : (
+            <ChevronLeft className="h-3 w-3" />
+          )}
+        </button>
+      </div>
+    </aside>
   );
 }

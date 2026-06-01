@@ -222,17 +222,17 @@ export default function StartupsPage() {
             Pitch ideas, find co-founders, and build startups
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
+        <Button onClick={() => setShowCreate(true)} className="mobile-primary-action">
           <Rocket className="mr-2 h-4 w-4" />
           Pitch an Idea
         </Button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+      <div className="mobile-tabs">
         <button
           onClick={() => setTab("browse")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`mobile-tab-button ${
             tab === "browse" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -240,7 +240,7 @@ export default function StartupsPage() {
         </button>
         <button
           onClick={() => setTab("mine")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+          className={`mobile-tab-button flex items-center justify-center gap-2 ${
             tab === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -256,7 +256,7 @@ export default function StartupsPage() {
       {tab === "browse" ? (
         <>
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1 max-w-md">
+            <div className="relative w-full flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search startup pitches..."
@@ -265,12 +265,12 @@ export default function StartupsPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="mobile-filter-scroll">
               {["All", "Idea", "Validation", "Building"].map((stage) => (
                 <Badge
                   key={stage}
                   variant={filter === stage ? "default" : "outline"}
-                  className="cursor-pointer hover:bg-primary/10 px-4 py-1.5"
+                  className="mobile-chip hover:bg-primary/10"
                   onClick={() => setFilter(stage)}
                 >
                   {stage}
@@ -287,10 +287,10 @@ export default function StartupsPage() {
             </div>
           ) : filtered.length === 0 ? (
             <Card>
-              <CardContent className="p-12 text-center">
+              <CardContent className="mobile-empty-card">
                 <Rocket className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
                 <p className="text-muted-foreground">No startup pitches yet.</p>
-                <Button className="mt-4" onClick={() => setShowCreate(true)}>
+                <Button className="mt-4 mobile-primary-action" onClick={() => setShowCreate(true)}>
                   <Rocket className="mr-2 h-4 w-4" />
                   Pitch the first idea!
                 </Button>
@@ -339,7 +339,7 @@ export default function StartupsPage() {
                       )}
                     </CardContent>
                     <CardFooter className="pt-3 border-t">
-                      <div className="flex items-center justify-between w-full">
+                      <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2">
                           <div className="flex -space-x-2">
                             {startup.members.slice(0, 3).map((m) => (
@@ -357,6 +357,7 @@ export default function StartupsPage() {
                           <Button
                             variant="default"
                             size="sm"
+                            className="w-full sm:w-auto"
                             onClick={() => handleJoinRequest(startup.id)}
                             disabled={requestingId === startup.id}
                           >
@@ -388,9 +389,9 @@ export default function StartupsPage() {
           </div>
         ) : myStartups.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
+            <CardContent className="mobile-empty-card">
               <p className="text-muted-foreground">You haven&apos;t pitched any startup ideas yet.</p>
-              <Button className="mt-4" onClick={() => setShowCreate(true)}>
+              <Button className="mt-4 mobile-primary-action" onClick={() => setShowCreate(true)}>
                 <Rocket className="mr-2 h-4 w-4" />
                 Pitch your first idea
               </Button>
@@ -403,8 +404,8 @@ export default function StartupsPage() {
               return (
                 <Card key={startup.id} className="overflow-hidden">
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-wrap items-center gap-3">
                         <Badge variant="outline" className={stageColors[startup.stage]}>
                           <StageIcon className="h-3 w-3 mr-1" />
                           {startup.stage.charAt(0) + startup.stage.slice(1).toLowerCase()}
@@ -444,7 +445,7 @@ export default function StartupsPage() {
                                   size="sm"
                                   onClick={() => handleRequest(startup.id, req.id, "ACCEPTED")}
                                   disabled={actionLoading === req.id}
-                                  className="bg-emerald-600 hover:bg-emerald-700"
+                                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 sm:flex-none"
                                 >
                                   {actionLoading === req.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -458,7 +459,7 @@ export default function StartupsPage() {
                                   variant="outline"
                                   onClick={() => handleRequest(startup.id, req.id, "REJECTED")}
                                   disabled={actionLoading === req.id}
-                                  className="border-red-300 text-red-600 hover:bg-red-50"
+                                  className="flex-1 border-red-300 text-red-600 hover:bg-red-50 sm:flex-none"
                                 >
                                   <XCircle className="h-4 w-4 mr-1" />
                                   Reject
@@ -483,7 +484,7 @@ export default function StartupsPage() {
 
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pitch a Startup Idea</DialogTitle>
             <DialogDescription>

@@ -84,8 +84,8 @@ export default function ProfilePage() {
       {/* Profile Header */}
       <Card>
         <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-6">
-            <Avatar className="h-24 w-24 border-4 border-primary/20">
+          <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-start sm:gap-6 sm:text-left">
+            <Avatar className="h-24 w-24 shrink-0 border-4 border-primary/20">
               <AvatarImage src={user.image || undefined} />
               <AvatarFallback className="text-2xl font-heading">
                 {user.name?.charAt(0)?.toUpperCase() || "U"}
@@ -94,8 +94,8 @@ export default function ProfilePage() {
             <div className="flex-1 min-w-0">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h1 className="font-heading text-2xl font-bold">
+                  <div className="flex flex-col items-center gap-2 sm:flex-row">
+                    <h1 className="font-heading text-2xl font-bold break-words">
                       {user.name}
                     </h1>
                     {user.uid && (
@@ -126,7 +126,7 @@ export default function ProfilePage() {
                     </span>
                   </div>
                 </div>
-                <Link href="/settings">
+                <Link href="/settings" className="w-full sm:w-auto">
                   <Button variant="outline" size="sm" className="w-full sm:w-auto shrink-0">
                     <Edit className="mr-2 h-3 w-3" />
                     Edit Profile
@@ -138,7 +138,7 @@ export default function ProfilePage() {
                   {user.bio}
                 </p>
               )}
-              <div className="flex items-center gap-4 mt-4">
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-4 sm:justify-start">
                 <Badge variant="default" className="gap-1">
                   <Star className="h-3 w-3" />
                   {user.reputation} Reputation
@@ -151,16 +151,16 @@ export default function ProfilePage() {
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {[
           { label: "Projects", value: user.stats?.projects || 0, icon: FolderKanban },
           { label: "Resources", value: user.stats?.resources || 0, icon: BookOpen },
           { label: "Study Groups", value: user.stats?.studyGroups || 0, icon: Users },
         ].map((stat) => (
           <Card key={stat.label}>
-            <CardContent className="p-4 text-center">
+            <CardContent className="p-3 text-center sm:p-4">
               <stat.icon className="h-5 w-5 mx-auto text-primary mb-2" />
-              <p className="text-2xl font-bold font-heading">{stat.value}</p>
+              <p className="text-xl font-bold font-heading sm:text-2xl">{stat.value}</p>
               <p className="text-xs text-muted-foreground">{stat.label}</p>
             </CardContent>
           </Card>

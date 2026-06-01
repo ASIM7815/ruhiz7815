@@ -382,6 +382,11 @@ function MessagesPageContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("mobile-chat-open", showMobileChat);
+    return () => document.documentElement.classList.remove("mobile-chat-open");
+  }, [showMobileChat]);
+
   // ── Select conversation ────────────────────────────────────────
 
   const selectConversation = useCallback(
@@ -605,7 +610,13 @@ function MessagesPageContent() {
         remoteStream={call.remoteStream}
         screenSharing={call.screenSharing}
       />
-      <div className="flex h-[calc(100dvh-4rem)] overflow-hidden -m-3 sm:-m-4 lg:-m-6">
+      <div
+        className={`flex overflow-hidden -m-4 lg:-m-6 ${
+          showMobileChat
+            ? "h-[calc(100dvh_-_3.5rem)]"
+            : "h-[calc(100dvh_-_3.5rem_-_var(--mobile-nav-height)_-_1rem)] md:h-[calc(100dvh_-_3.5rem)]"
+        }`}
+      >
         {/* ── Left Panel: Conversations ── */}
         <div
           className={`w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-background ${
@@ -739,7 +750,7 @@ function MessagesPageContent() {
                   <button
                     key={conv.id}
                     onClick={() => selectConversation(conv)}
-                    className={`w-full flex items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left ${
+                    className={`w-full flex min-h-[4.5rem] items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left ${
                       selectedConversation === conv.id ? "bg-accent" : ""
                     }`}
                   >
@@ -806,7 +817,7 @@ function MessagesPageContent() {
                     <button
                       key={gc.id}
                       onClick={() => { setSelectedGroupId(gc.id); setShowMobileChat(true); }}
-                      className={`w-full flex items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left ${
+                      className={`w-full flex min-h-[4.5rem] items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left ${
                         selectedGroupId === gc.id ? "bg-accent" : ""
                       }`}
                     >
@@ -852,11 +863,6 @@ function MessagesPageContent() {
         >
           {msgTab === "groups" && selectedGroupId ? (
             <div className="flex-1 flex flex-col">
-              <div className="md:hidden p-2 border-b">
-                <Button variant="ghost" size="sm" onClick={() => { setSelectedGroupId(null); setShowMobileChat(false); }}>
-                  <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                </Button>
-              </div>
               <div className="flex-1">
                 <GroupChat key={selectedGroupId} groupId={selectedGroupId} onBack={() => { setSelectedGroupId(null); setShowMobileChat(false); }} />
               </div>
@@ -864,11 +870,11 @@ function MessagesPageContent() {
           ) : selectedConversation && selectedParticipant ? (
             <>
               {/* Chat Header */}
-              <div className="flex items-center gap-3 p-4 border-b border-border">
+              <div className="flex min-h-16 items-center gap-2 border-b border-border p-3 sm:gap-3 sm:p-4">
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="md:hidden"
+                  size="icon"
+                  className="h-10 w-10 md:hidden"
                   onClick={() => setShowMobileChat(false)}
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -882,10 +888,10 @@ function MessagesPageContent() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">
+                  <p className="truncate text-sm font-medium">
                     {selectedParticipant.name}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="truncate text-xs text-muted-foreground">
                     UID: {selectedParticipant.uid}
                   </p>
                 </div>
@@ -951,7 +957,7 @@ function MessagesPageContent() {
                         className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                       >
                         <div
-                          className={`flex items-end gap-2 max-w-[75%] ${
+                          className={`flex max-w-[84%] items-end gap-2 sm:max-w-[75%] ${
                             isOwn ? "flex-row-reverse" : ""
                           }`}
                         >
@@ -1079,14 +1085,14 @@ function MessagesPageContent() {
               </div>
 
               {/* Message Input */}
-              <div className="p-4 border-t border-border">
+              <div className="border-t border-border p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4">
                 <div className="flex items-center gap-2">
                   <Input
                     placeholder="Type a message..."
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="flex-1"
+                    className="h-11 flex-1 sm:h-8"
                     maxLength={5000}
                   />
                   <Tooltip>
@@ -1094,6 +1100,7 @@ function MessagesPageContent() {
                       render={
                         <Button
                           size="icon"
+                          className="h-11 w-11 sm:h-8 sm:w-8"
                           onClick={sendMessage}
                           disabled={!messageInput.trim()}
                         >

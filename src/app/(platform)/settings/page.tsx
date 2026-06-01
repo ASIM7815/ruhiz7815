@@ -219,7 +219,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList>
+        <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
             Profile
@@ -240,7 +240,7 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <Avatar className="h-20 w-20 border-2 border-primary/20">
                   <AvatarImage src={profile?.image || undefined} />
                   <AvatarFallback className="text-2xl">
@@ -258,6 +258,7 @@ export default function SettingsPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="w-full sm:w-auto"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
                   >
@@ -359,7 +360,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={saving}>
+                <Button onClick={handleSave} disabled={saving} className="mobile-primary-action">
                   {saving ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
@@ -401,7 +402,7 @@ export default function SettingsPage() {
               ].map((item) => (
                 <div
                   key={item.title}
-                  className="flex items-center justify-between py-2"
+                  className="flex items-start justify-between gap-4 py-2"
                 >
                   <div>
                     <p className="text-sm font-medium">{item.title}</p>

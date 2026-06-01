@@ -1,9 +1,11 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useRouter } from "next/navigation";
-import { Search, Bell, Sun, Moon } from "lucide-react";
+import { Search, Bell, Sun, Moon, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +25,7 @@ export function Topbar() {
   } | null>(null);
   const [searching, setSearching] = useState(false);
   const [showResult, setShowResult] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const userImage = user?.user_metadata?.avatar_url ?? undefined;
   const userName = user?.user_metadata?.full_name ?? "";
@@ -57,82 +60,122 @@ export function Topbar() {
     }
   }
 
-  return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 sm:gap-4 border-b bg-background/80 backdrop-blur-xl px-3 sm:px-4 lg:px-6">
-      {/* Spacer for mobile menu button */}
-      <div className="lg:hidden w-10 shrink-0" />
-
-      {/* Search by UID */}
-      <div className="flex-1 max-w-md relative hidden sm:block">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by 5-digit UID..."
-            className="pl-10 h-9 bg-muted/50 border-0"
-            value={searchUid}
-            onChange={(e) => handleSearch(e.target.value)}
-            onBlur={() => setTimeout(() => setShowResult(false), 200)}
-            onFocus={() => searchResult && setShowResult(true)}
-            maxLength={5}
-          />
+  const searchBox = (
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        placeholder="Search by 5-digit UID..."
+        className="h-10 bg-muted/50 pl-10 sm:h-9 sm:border-0"
+        value={searchUid}
+        onChange={(e) => handleSearch(e.target.value)}
+        onBlur={() => setTimeout(() => setShowResult(false), 200)}
+        onFocus={() => searchResult && setShowResult(true)}
+        inputMode="numeric"
+        maxLength={5}
+      />
+      {showResult && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-background p-2 shadow-lg">
+          {searching ? (
+            <p className="p-2 text-sm text-muted-foreground">Searching...</p>
+          ) : searchResult ? (
+            <button
+              className="flex w-full items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-muted"
+              onClick={() => {
+                router.push(`/students/${searchResult.uid}`);
+                setShowResult(false);
+                setSearchUid("");
+                setMobileSearchOpen(false);
+              }}
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={searchResult.image || undefined} />
+                <AvatarFallback>
+                  {searchResult.name?.charAt(0)?.toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">
+                  {searchResult.name}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  #{searchResult.uid}
+                  {searchResult.university ? ` · ${searchResult.university}` : ""}
+                </p>
+              </div>
+            </button>
+          ) : (
+            <p className="p-2 text-sm text-muted-foreground">No user found</p>
+          )}
         </div>
-        {showResult && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg p-2 z-50">
-            {searching ? (
-              <p className="text-sm text-muted-foreground p-2">Searching...</p>
-            ) : searchResult ? (
-              <button
-                className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-muted transition-colors text-left"
-                onClick={() => {
-                  router.push(`/students/${searchResult.uid}`);
-                  setShowResult(false);
-                  setSearchUid("");
-                }}
-              >
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={searchResult.image || undefined} />
-                  <AvatarFallback>
-                    {searchResult.name?.charAt(0)?.toUpperCase() || "U"}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="text-sm font-medium">{searchResult.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    #{searchResult.uid}
-                    {searchResult.university ? ` · ${searchResult.university}` : ""}
-                  </p>
-                </div>
-              </button>
+      )}
+    </div>
+  );
+
+  return (
+    <header className="sticky top-0 z-30 border-b bg-background/90 px-3 backdrop-blur-xl sm:px-4 lg:px-6">
+      <div className="flex h-14 items-center gap-2 sm:gap-4">
+        <Link href="/dashboard" className="flex min-w-0 items-center gap-2 lg:hidden">
+          <Image
+            src="/logo.png"
+            alt="RUHIZ"
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 rounded-lg object-cover"
+          />
+          <span className="font-heading text-lg font-bold">RUHIZ</span>
+        </Link>
+
+        <div className="relative hidden max-w-md flex-1 sm:block">{searchBox}</div>
+
+        <div className="flex-1 lg:hidden" />
+
+        <div className="flex items-center gap-1 sm:gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 sm:hidden"
+            onClick={() => setMobileSearchOpen((open) => !open)}
+            aria-label={mobileSearchOpen ? "Close search" : "Open search"}
+          >
+            {mobileSearchOpen ? (
+              <X className="h-4 w-4" />
             ) : (
-              <p className="text-sm text-muted-foreground p-2">No user found</p>
+              <Search className="h-4 w-4" />
             )}
-          </div>
-        )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            aria-label="Toggle theme"
+          >
+            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative h-10 w-10"
+            render={<Link href="/notifications" />}
+          >
+            <Bell className="h-4 w-4" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
+          </Button>
+          <Link href="/profile" className="rounded-full">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={userImage} />
+              <AvatarFallback>{userInitials}</AvatarFallback>
+            </Avatar>
+          </Link>
+        </div>
       </div>
 
-      {/* Spacer on mobile to push icons right */}
-      <div className="flex-1 sm:hidden" />
-
-      {/* Right side */}
-      <div className="flex items-center gap-1 sm:gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
-          <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-        </Button>
-        <Button variant="ghost" size="icon" className="relative h-10 w-10">
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
-        </Button>
-        <Avatar className="h-8 w-8">
-          <AvatarImage src={userImage} />
-          <AvatarFallback>{userInitials}</AvatarFallback>
-        </Avatar>
-      </div>
+      {mobileSearchOpen && (
+        <div className="pb-3 sm:hidden">
+          <div className="relative">{searchBox}</div>
+        </div>
+      )}
     </header>
   );
 }

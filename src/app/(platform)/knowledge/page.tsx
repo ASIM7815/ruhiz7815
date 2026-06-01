@@ -235,17 +235,17 @@ export default function KnowledgeHubPage() {
             Upload and access notes, papers, and study materials
           </p>
         </div>
-        <Button onClick={() => setShowUpload(true)}>
+        <Button onClick={() => setShowUpload(true)} className="mobile-primary-action">
           <Upload className="mr-2 h-4 w-4" />
           Upload Resource
         </Button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+      <div className="mobile-tabs">
         <button
           onClick={() => setTab("browse")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`mobile-tab-button ${
             tab === "browse" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -253,7 +253,7 @@ export default function KnowledgeHubPage() {
         </button>
         <button
           onClick={() => setTab("mine")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`mobile-tab-button ${
             tab === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -274,12 +274,12 @@ export default function KnowledgeHubPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex gap-2">
+        <div className="mobile-filter-scroll sm:justify-end">
           {["All", "Notes", "Papers", "Materials"].map((type) => (
             <Badge
               key={type}
               variant={filter === type ? "default" : "outline"}
-              className="cursor-pointer hover:bg-primary/10 px-4 py-1.5"
+              className="mobile-chip hover:bg-primary/10"
               onClick={() => setFilter(type)}
             >
               {type}
@@ -290,23 +290,23 @@ export default function KnowledgeHubPage() {
 
       {/* Resources Grid */}
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mobile-card-grid">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="p-12 text-center">
+          <CardContent className="mobile-empty-card">
             <p className="text-muted-foreground">No resources found.</p>
-            <Button className="mt-4" onClick={() => setShowUpload(true)}>
+            <Button className="mt-4 mobile-primary-action" onClick={() => setShowUpload(true)}>
               <Upload className="mr-2 h-4 w-4" />
               Upload the first one!
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mobile-card-grid">
           {filtered.map((resource) => {
             const TypeIcon = typeIcons[resource.type] || FileText;
             return (
@@ -359,6 +359,7 @@ export default function KnowledgeHubPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="min-h-9"
                         onClick={() => handleView(resource.fileUrl)}
                         title="Open in browser"
                         disabled={!resource.fileUrl}
@@ -369,6 +370,7 @@ export default function KnowledgeHubPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="min-h-9"
                         onClick={() => handleDownload(resource.fileUrl, resource.title, resource.id)}
                         title="Download file"
                         disabled={!resource.fileUrl}
@@ -380,7 +382,7 @@ export default function KnowledgeHubPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-destructive hover:text-destructive"
+                          className="min-h-9 text-destructive hover:text-destructive"
                           onClick={() => handleDelete(resource.id)}
                           title="Delete resource"
                         >
@@ -399,16 +401,16 @@ export default function KnowledgeHubPage() {
       ) : (
         /* My Uploads Tab */
         myLoading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mobile-card-grid">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
             ))}
           </div>
         ) : myResources.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
+            <CardContent className="mobile-empty-card">
               <p className="text-muted-foreground">You haven&apos;t uploaded any resources yet.</p>
-              <Button className="mt-4" onClick={() => setShowUpload(true)}>
+              <Button className="mt-4 mobile-primary-action" onClick={() => setShowUpload(true)}>
                 <Upload className="mr-2 h-4 w-4" />
                 Upload your first resource
               </Button>
@@ -421,7 +423,7 @@ export default function KnowledgeHubPage() {
               const isEditing = editingId === resource.id;
               return (
                 <Card key={resource.id} className="hover:border-primary/30 transition-all">
-                  <CardContent className="p-4 flex items-center gap-4">
+                  <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
                     <div className="shrink-0">
                       <Badge variant="outline" className={typeColors[resource.type]}>
                         <TypeIcon className="h-3 w-3 mr-1" />
@@ -468,7 +470,7 @@ export default function KnowledgeHubPage() {
                         {resource.university && <span>{resource.university}</span>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex w-full items-center justify-end gap-1 sm:w-auto sm:shrink-0">
                       {!isEditing && (
                         <Button
                           size="sm"
@@ -508,7 +510,7 @@ export default function KnowledgeHubPage() {
 
       {/* Upload Dialog */}
       <Dialog open={showUpload} onOpenChange={setShowUpload}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Upload Resource</DialogTitle>
             <DialogDescription>

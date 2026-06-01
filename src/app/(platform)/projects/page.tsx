@@ -177,17 +177,20 @@ export default function ProjectsPage() {
             Browse project ideas or create your own
           </p>
         </div>
-        <Button render={<Link href="/projects/create" />}>
+        <Button
+          render={<Link href="/projects/create" />}
+          className="mobile-primary-action"
+        >
             <Plus className="mr-2 h-4 w-4" />
             Post Project Idea
         </Button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+      <div className="mobile-tabs">
         <button
           onClick={() => setTab("browse")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`mobile-tab-button ${
             tab === "browse" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -195,7 +198,7 @@ export default function ProjectsPage() {
         </button>
         <button
           onClick={() => setTab("mine")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+          className={`mobile-tab-button flex items-center justify-center gap-2 ${
             tab === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -221,12 +224,12 @@ export default function ProjectsPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="mobile-filter-scroll sm:justify-end">
               {["All", "Open", "In Progress"].map((f) => (
                 <Badge
                   key={f}
                   variant={filter === f ? "default" : "outline"}
-                  className="cursor-pointer hover:bg-primary/10 px-4 py-1.5"
+                  className="mobile-chip hover:bg-primary/10"
                   onClick={() => setFilter(f)}
                 >
                   {f}
@@ -237,23 +240,23 @@ export default function ProjectsPage() {
 
           {/* Project Grid */}
           {loading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="mobile-card-grid">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-64 bg-muted animate-pulse rounded-lg" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
             <Card>
-              <CardContent className="p-12 text-center">
+              <CardContent className="mobile-empty-card">
                 <p className="text-muted-foreground">No projects found.</p>
-                <Button className="mt-4" render={<Link href="/projects/create" />}>
+                <Button className="mt-4 mobile-primary-action" render={<Link href="/projects/create" />}>
                     <Plus className="mr-2 h-4 w-4" />
                     Post the first one!
                 </Button>
               </CardContent>
             </Card>
           ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mobile-card-grid">
             {filtered.map((project) => (
               <Card
                 key={project.id}
@@ -300,7 +303,7 @@ export default function ProjectsPage() {
                   </div>
                 </CardContent>
                 <CardFooter className="pt-3 border-t">
-                  <div className="flex items-center justify-between w-full">
+                  <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-6 w-6">
                         <AvatarImage src={project.owner.image || undefined} />
@@ -320,7 +323,12 @@ export default function ProjectsPage() {
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" render={<Link href={`/projects/${project.id}`} />}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      render={<Link href={`/projects/${project.id}`} />}
+                    >
                         View
                         <ArrowRight className="ml-1 h-3 w-3" />
                     </Button>
@@ -341,9 +349,9 @@ export default function ProjectsPage() {
           </div>
         ) : myProjects.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
+            <CardContent className="mobile-empty-card">
               <p className="text-muted-foreground">You haven&apos;t created any projects yet.</p>
-              <Button className="mt-4" render={<Link href="/projects/create" />}>
+              <Button className="mt-4 mobile-primary-action" render={<Link href="/projects/create" />}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create your first project
               </Button>
@@ -359,8 +367,8 @@ export default function ProjectsPage() {
             {myProjects.map((project) => (
               <Card key={project.id} className="overflow-hidden">
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-3">
                       <Badge variant="outline" className={statusColors[project.status]}>
                         {project.status === "IN_PROGRESS" ? "In Progress" : project.status.charAt(0) + project.status.slice(1).toLowerCase()}
                       </Badge>
@@ -408,7 +416,7 @@ export default function ProjectsPage() {
                                 size="sm"
                                 onClick={() => handleRequest(project.id, req.id, "accept")}
                                 disabled={actionLoading === req.id}
-                                className="bg-emerald-600 hover:bg-emerald-700"
+                                className="flex-1 bg-emerald-600 hover:bg-emerald-700 sm:flex-none"
                               >
                                 {actionLoading === req.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -422,7 +430,7 @@ export default function ProjectsPage() {
                                 variant="outline"
                                 onClick={() => handleRequest(project.id, req.id, "reject")}
                                 disabled={actionLoading === req.id}
-                                className="border-red-300 text-red-600 hover:bg-red-50"
+                                className="flex-1 border-red-300 text-red-600 hover:bg-red-50 sm:flex-none"
                               >
                                 <XCircle className="h-4 w-4 mr-1" />
                                 Reject

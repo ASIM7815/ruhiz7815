@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Send,
+  ArrowLeft,
   Image as ImageIcon,
   FileText,
   MapPin,
@@ -387,10 +388,10 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b bg-card/50 backdrop-blur-sm">
+      <div className="flex min-h-16 items-center gap-2 border-b bg-card/50 p-3 backdrop-blur-sm sm:gap-3 sm:p-4">
         {onBack && (
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            ←
+          <Button variant="ghost" size="icon" className="h-10 w-10 md:hidden" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
         <div className="flex-1 min-w-0">
@@ -467,7 +468,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
                     <AvatarFallback className="text-[10px]">{getSenderName(msg.sender_id).charAt(0)}</AvatarFallback>
                   </Avatar>
                 )}
-                <div className={cn("max-w-[70%] space-y-0.5", isMe ? "items-end" : "items-start")}>
+                <div className={cn("max-w-[84%] space-y-0.5 sm:max-w-[70%]", isMe ? "items-end" : "items-start")}>
                   {!isMe && (
                     <p className="text-[10px] text-muted-foreground px-1">{getSenderName(msg.sender_id)}</p>
                   )}
@@ -519,7 +520,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-3 border-t bg-card/50 backdrop-blur-sm">
+      <div className="border-t bg-card/50 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-sm">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -539,7 +540,7 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 shrink-0"
+              className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingFile}
               title={uploadingFile ? "Uploading..." : "Share file"}
@@ -555,9 +556,9 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 h-9 bg-muted/50 border-0"
+            className="h-11 flex-1 border-0 bg-muted/50 sm:h-9"
           />
-          <Button type="submit" size="icon" className="h-8 w-8 shrink-0" disabled={!newMessage.trim() || sending}>
+          <Button type="submit" size="icon" className="h-11 w-11 shrink-0 sm:h-8 sm:w-8" disabled={!newMessage.trim() || sending}>
             <Send className="h-4 w-4" />
           </Button>
         </form>

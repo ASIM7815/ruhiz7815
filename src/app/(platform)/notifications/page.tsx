@@ -37,6 +37,13 @@ export default function NotificationsPage() {
 
       <Card>
         <CardContent className="p-0 divide-y">
+          {notifications.length === 0 && (
+            <div className="mobile-empty-card">
+              <p className="text-sm text-muted-foreground">
+                No notifications yet.
+              </p>
+            </div>
+          )}
           {notifications.map((notification) => (
             <div
               key={notification.id}

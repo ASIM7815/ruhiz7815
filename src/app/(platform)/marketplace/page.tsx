@@ -226,17 +226,17 @@ export default function MarketplacePage() {
             Buy and sell books, gadgets, and services
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
+        <Button onClick={() => setShowCreate(true)} className="mobile-primary-action">
           <Plus className="mr-2 h-4 w-4" />
           Sell Something
         </Button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+      <div className="mobile-tabs">
         <button
           onClick={() => setTab("browse")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`mobile-tab-button ${
             tab === "browse" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -244,7 +244,7 @@ export default function MarketplacePage() {
         </button>
         <button
           onClick={() => setTab("mine")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+          className={`mobile-tab-button ${
             tab === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -264,12 +264,12 @@ export default function MarketplacePage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="mobile-filter-scroll sm:justify-end">
               {["All", "Books", "Gadgets", "Services"].map((cat) => (
                 <Badge
                   key={cat}
                   variant={filter === cat ? "default" : "outline"}
-                  className="cursor-pointer hover:bg-primary/10 px-4 py-1.5"
+                  className="mobile-chip hover:bg-primary/10"
                   onClick={() => setFilter(cat)}
                 >
                   {cat}
@@ -286,10 +286,10 @@ export default function MarketplacePage() {
             </div>
           ) : filtered.length === 0 ? (
             <Card>
-              <CardContent className="p-12 text-center">
+              <CardContent className="mobile-empty-card">
                 <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
                 <p className="text-muted-foreground">No listings yet.</p>
-                <Button className="mt-4" onClick={() => setShowCreate(true)}>
+                <Button className="mt-4 mobile-primary-action" onClick={() => setShowCreate(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   List the first item!
                 </Button>
@@ -345,7 +345,7 @@ export default function MarketplacePage() {
                   </CardContent>
 
                   <CardFooter className="px-4 pb-4 pt-0">
-                    <div className="flex items-center justify-between w-full">
+                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={listing.seller.image || undefined} />
@@ -362,6 +362,7 @@ export default function MarketplacePage() {
                         <Button
                           variant="default"
                           size="sm"
+                          className="w-full sm:w-auto"
                           onClick={() => handleContact(listing.id)}
                           disabled={contactingId === listing.id}
                         >
@@ -392,9 +393,9 @@ export default function MarketplacePage() {
           </div>
         ) : myListings.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
+            <CardContent className="mobile-empty-card">
               <p className="text-muted-foreground">You haven&apos;t listed anything yet.</p>
-              <Button className="mt-4" onClick={() => setShowCreate(true)}>
+              <Button className="mt-4 mobile-primary-action" onClick={() => setShowCreate(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 List your first item
               </Button>
@@ -404,7 +405,7 @@ export default function MarketplacePage() {
           <div className="space-y-3">
             {myListings.map((listing) => (
               <Card key={listing.id} className="hover:border-primary/30 transition-all">
-                <CardContent className="p-4 flex items-center gap-4">
+                <CardContent className="flex items-center gap-3 p-4 sm:gap-4">
                   <div className="h-16 w-16 shrink-0 rounded-lg overflow-hidden bg-muted">
                     {listing.imageUrl ? (
                       <Image
@@ -434,7 +435,7 @@ export default function MarketplacePage() {
                       </Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex shrink-0 items-center gap-1">
                     {!listing.sold && (
                       <Button size="sm" variant="ghost" onClick={() => handleMarkSold(listing.id)} title="Mark as sold">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
@@ -459,7 +460,7 @@ export default function MarketplacePage() {
 
       {/* Create Listing Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Sell Something</DialogTitle>
             <DialogDescription>

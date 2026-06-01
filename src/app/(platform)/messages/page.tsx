@@ -5,10 +5,14 @@ import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase-client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import NextImage from "next/image";
 import {
   Search,
   Send,
   Smile,
+  Paperclip,
+  FileText,
+  Image as ImageIcon,
   Loader2,
   ArrowLeft,
   MessageSquarePlus,
@@ -38,6 +42,7 @@ import {
 import { GroupChat } from "@/components/group-chat";
 import { CallInterface } from "@/components/messaging/call-interface";
 import { useWebRTCCall, type CallMessage } from "@/hooks/use-webrtc-call";
+import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -95,6 +100,13 @@ interface GroupConversation {
   last_message_at: string | null;
 }
 
+interface DirectAttachment {
+  fileName: string;
+  mimeType: string;
+  size: number;
+  url: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 function timeAgo(dateStr: string): string {
@@ -117,7 +129,44 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const ATTACHMENT_PREFIX = "__RUHIZ_ATTACHMENT__:";
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😊", "🔥", "🎉", "🙏", "💯", "😮", "😢", "🤝", "✅"];
+
+function encodeAttachment(attachment: DirectAttachment) {
+  return `${ATTACHMENT_PREFIX}${JSON.stringify(attachment)}`;
+}
+
+function parseAttachment(content: string): DirectAttachment | null {
+  if (!content.startsWith(ATTACHMENT_PREFIX)) return null;
+  try {
+    const parsed = JSON.parse(content.slice(ATTACHMENT_PREFIX.length)) as Partial<DirectAttachment>;
+    if (!parsed.fileName || !parsed.url || !parsed.mimeType || typeof parsed.size !== "number") {
+      return null;
+    }
+    return {
+      fileName: parsed.fileName,
+      mimeType: parsed.mimeType,
+      size: parsed.size,
+      url: parsed.url,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getMessagePreview(content: string) {
+  const attachment = parseAttachment(content);
+  if (!attachment) return content;
+  return attachment.mimeType.startsWith("image/")
+    ? `Photo: ${attachment.fileName}`
+    : `File: ${attachment.fileName}`;
+}
 
 // ── Component ──────────────────────────────────────────────────────
 
@@ -147,10 +196,12 @@ function MessagesPageContent() {
   const [groupConversations, setGroupConversations] = useState<GroupConversation[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const convPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Fetch conversations ────────────────────────────────────────
 
@@ -405,18 +456,14 @@ function MessagesPageContent() {
 
   // ── Send message ───────────────────────────────────────────────
 
-  const sendMessage = useCallback(async () => {
-    if (!messageInput.trim() || !selectedConversation) return;
-
-    const content = messageInput.trim();
-    setMessageInput("");
-
+  const sendContent = useCallback((content: string) => {
+    if (!content.trim() || !selectedConversation || !userId) return;
     // Optimistic update — shows immediately with single tick
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg: MessageData = {
       id: tempId,
       content,
-      senderId: userId!,
+      senderId: userId,
       isRead: false,
       createdAt: new Date().toISOString(),
       reactions: [],
@@ -446,7 +493,52 @@ function MessagesPageContent() {
       .catch(() => {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
       });
-  }, [messageInput, selectedConversation, userId, fetchConversations]);
+  }, [selectedConversation, userId, fetchConversations]);
+
+  const sendMessage = useCallback(async () => {
+    const content = messageInput.trim();
+    if (!content) return;
+    setMessageInput("");
+    sendContent(content);
+  }, [messageInput, sendContent]);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedConversation) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "directMessage");
+      formData.append("entityId", selectedConversation);
+
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const uploadData = await uploadRes.json().catch(() => ({}));
+      if (!uploadRes.ok) {
+        toast.error(uploadData.error || "File upload failed.");
+        return;
+      }
+
+      sendContent(
+        encodeAttachment({
+          fileName: uploadData.fileName || file.name,
+          mimeType: uploadData.mimeType || file.type || "application/octet-stream",
+          size: uploadData.size || file.size,
+          url: uploadData.url,
+        })
+      );
+    } catch {
+      toast.error("File upload failed. Please try again.");
+    } finally {
+      setUploadingAttachment(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [selectedConversation, sendContent]);
 
   // ── Search users by UID ────────────────────────────────────────
 
@@ -779,8 +871,8 @@ function MessagesPageContent() {
                         <p className="text-xs text-muted-foreground truncate">
                           {conv.lastMessage
                             ? conv.lastMessage.senderId === userId
-                              ? `You: ${conv.lastMessage.content}`
-                              : conv.lastMessage.content
+                              ? `You: ${getMessagePreview(conv.lastMessage.content)}`
+                              : getMessagePreview(conv.lastMessage.content)
                             : "Start a conversation"}
                         </p>
                         {conv.unreadCount > 0 && (
@@ -946,6 +1038,7 @@ function MessagesPageContent() {
                 <div className="space-y-3">
                   {messages.map((msg, idx) => {
                     const isOwn = msg.senderId === userId;
+                    const attachment = parseAttachment(msg.content);
                     const showAvatar =
                       !isOwn &&
                       (idx === 0 ||
@@ -982,7 +1075,48 @@ function MessagesPageContent() {
                                   : "bg-muted rounded-bl-md"
                               }`}
                             >
-                              {msg.content}
+                              {attachment ? (
+                                <a
+                                  href={attachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block min-w-48 max-w-64"
+                                >
+                                  {attachment.mimeType.startsWith("image/") ? (
+                                    <div className="space-y-2">
+                                      <NextImage
+                                        src={attachment.url}
+                                        alt={attachment.fileName}
+                                        width={260}
+                                        height={180}
+                                        className="max-h-56 w-full rounded-xl object-cover"
+                                      />
+                                      <div className="flex items-center gap-2">
+                                        <ImageIcon className="h-4 w-4 shrink-0" />
+                                        <span className="truncate text-xs">
+                                          {attachment.fileName}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-3">
+                                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background/20">
+                                        <FileText className="h-5 w-5" />
+                                      </span>
+                                      <span className="min-w-0">
+                                        <span className="block truncate font-medium">
+                                          {attachment.fileName}
+                                        </span>
+                                        <span className="block text-xs opacity-80">
+                                          {formatFileSize(attachment.size)}
+                                        </span>
+                                      </span>
+                                    </div>
+                                  )}
+                                </a>
+                              ) : (
+                                msg.content
+                              )}
                             </div>
 
                             {/* Timestamp + read status */}
@@ -1087,6 +1221,60 @@ function MessagesPageContent() {
               {/* Message Input */}
               <div className="border-t border-border p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4">
                 <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="image/*,.pdf,.zip,.doc,.docx,.ppt,.pptx,.txt"
+                    onChange={handleFileUpload}
+                  />
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingAttachment}
+                        >
+                          {uploadingAttachment ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Paperclip className="h-4 w-4" />
+                          )}
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Share file</TooltipContent>
+                  </Tooltip>
+                  <Popover>
+                    <PopoverTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
+                        />
+                      }
+                    >
+                      <Smile className="h-4 w-4" />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-2" side="top" align="start">
+                      <div className="grid grid-cols-6 gap-1">
+                        {QUICK_EMOJIS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => setMessageInput((value) => `${value}${emoji}`)}
+                            className="flex h-9 w-9 items-center justify-center rounded-lg text-lg transition-colors hover:bg-muted"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   <Input
                     placeholder="Type a message..."
                     value={messageInput}
@@ -1102,7 +1290,7 @@ function MessagesPageContent() {
                           size="icon"
                           className="h-11 w-11 sm:h-8 sm:w-8"
                           onClick={sendMessage}
-                          disabled={!messageInput.trim()}
+                          disabled={!messageInput.trim() || uploadingAttachment}
                         >
                           <Send className="h-4 w-4" />
                         </Button>

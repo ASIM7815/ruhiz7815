@@ -10,6 +10,7 @@ import {
   Search,
   Send,
   Smile,
+  Plus,
   Paperclip,
   FileText,
   Image as ImageIcon,
@@ -778,7 +779,7 @@ function MessagesPageContent() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
+                    <p className="max-w-[11rem] truncate text-sm font-medium sm:max-w-[15rem]" title={searchResult.name}>
                       {searchResult.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -857,8 +858,11 @@ function MessagesPageContent() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium truncate">
+                      <div className="flex min-w-0 items-center justify-between">
+                        <p
+                          className="max-w-[9rem] truncate text-sm font-medium sm:max-w-[12rem] lg:max-w-[15rem]"
+                          title={conv.participant?.name ?? "Unknown"}
+                        >
                           {conv.participant?.name ?? "Unknown"}
                         </p>
                         {conv.lastMessage && (
@@ -867,8 +871,8 @@ function MessagesPageContent() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground truncate">
+                      <div className="flex min-w-0 items-center justify-between">
+                        <p className="min-w-0 truncate text-xs text-muted-foreground">
                           {conv.lastMessage
                             ? conv.lastMessage.senderId === userId
                               ? `You: ${getMessagePreview(conv.lastMessage.content)}`
@@ -921,7 +925,12 @@ function MessagesPageContent() {
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium truncate">{gc.name}</p>
+                        <p
+                          className="max-w-[9rem] truncate text-sm font-medium sm:max-w-[12rem] lg:max-w-[15rem]"
+                          title={gc.name}
+                        >
+                          {gc.name}
+                        </p>
                           {gc.last_message_at && (
                             <span className="text-[10px] text-muted-foreground ml-2 flex-shrink-0">
                               {timeAgo(gc.last_message_at)}
@@ -980,7 +989,10 @@ function MessagesPageContent() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
+                  <p
+                    className="max-w-[9.5rem] truncate text-sm font-medium sm:max-w-[16rem] lg:max-w-[24rem]"
+                    title={selectedParticipant.name}
+                  >
                     {selectedParticipant.name}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
@@ -1228,39 +1240,38 @@ function MessagesPageContent() {
                     accept="image/*,.pdf,.zip,.doc,.docx,.ppt,.pptx,.txt"
                     onChange={handleFileUpload}
                   />
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={uploadingAttachment}
-                        >
-                          {uploadingAttachment ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Paperclip className="h-4 w-4" />
-                          )}
-                        </Button>
-                      }
-                    />
-                    <TooltipContent>Share file</TooltipContent>
-                  </Tooltip>
                   <Popover>
                     <PopoverTrigger
                       render={
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
+                          className="h-10 w-10 shrink-0 rounded-full border border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 sm:h-8 sm:w-8"
+                          disabled={uploadingAttachment}
+                          aria-label="Open emoji and file actions"
                         />
                       }
                     >
-                      <Smile className="h-4 w-4" />
+                      {uploadingAttachment ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
+                      )}
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-2" side="top" align="start">
+                    <PopoverContent className="w-64 p-2" side="top" align="start">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingAttachment}
+                        className="mb-2 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                        Share file
+                      </button>
+                      <div className="flex items-center gap-2 border-t px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground">
+                        <Smile className="h-3.5 w-3.5" />
+                        Add emoji
+                      </div>
                       <div className="grid grid-cols-6 gap-1">
                         {QUICK_EMOJIS.map((emoji) => (
                           <button
@@ -1280,7 +1291,7 @@ function MessagesPageContent() {
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="h-11 flex-1 sm:h-8"
+                    className="h-12 min-w-0 flex-1 rounded-xl px-3 text-base sm:h-8 sm:text-sm"
                     maxLength={5000}
                   />
                   <Tooltip>
@@ -1288,7 +1299,7 @@ function MessagesPageContent() {
                       render={
                         <Button
                           size="icon"
-                          className="h-11 w-11 sm:h-8 sm:w-8"
+                          className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
                           onClick={sendMessage}
                           disabled={!messageInput.trim() || uploadingAttachment}
                         >

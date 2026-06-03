@@ -32,7 +32,7 @@ const footerLinks = {
     { label: "How It Works", href: "/#how-it-works" },
     { label: "Projects", href: "/projects" },
     { label: "Marketplace", href: "/marketplace" },
-    { label: "Startups", href: "/startups" },
+    // { label: "Startups", href: "/startups" }, // Hidden - code preserved
   ],
   Resources: [
     { label: "Knowledge Hub", href: "/knowledge" },

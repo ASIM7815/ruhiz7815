@@ -22,7 +22,7 @@ The implementation follows a 6-phase approach:
   - Configure eventsPerSecond limit and auth settings
   - _Requirements: 8.4, 12.5_
 
-- [-] 2. Implement Connection Manager
+- [ ] 2. Implement Connection Manager
   - [x] 2.1 Create ConnectionManager class with connection lifecycle
     - Create `lib/realtime/ConnectionManager.ts`
     - Implement connect(), disconnect(), reconnect() methods

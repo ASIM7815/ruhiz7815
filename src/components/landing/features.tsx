@@ -47,13 +47,14 @@ const features = [
       "Buy and sell textbooks, gadgets, notes, and digital services within a trusted student community.",
     gradient: "from-pink-500 to-rose-500",
   },
-  {
-    icon: Rocket,
-    title: "Startup Hub",
-    description:
-      "Pitch business ideas, find co-founders, validate concepts, and build startups from scratch.",
-    gradient: "from-indigo-500 to-violet-600",
-  },
+  // Hidden - code preserved
+  // {
+  //   icon: Rocket,
+  //   title: "Startup Hub",
+  //   description:
+  //     "Pitch business ideas, find co-founders, validate concepts, and build startups from scratch.",
+  //   gradient: "from-indigo-500 to-violet-600",
+  // },
 ];
 
 const container = {

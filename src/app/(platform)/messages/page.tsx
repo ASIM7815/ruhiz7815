@@ -79,7 +79,8 @@ interface Conversation {
 
 interface SearchResult {
   id: string;
-  uid: string;
+  uid: string | null;
+  username: string | null;
   name: string;
   image: string | null;
   bio: string | null;
@@ -551,7 +552,7 @@ function MessagesPageContent() {
 
     try {
       const res = await fetch(
-        `/api/users/search?uid=${encodeURIComponent(searchQuery.trim())}`
+        `/api/users/search?q=${encodeURIComponent(searchQuery.trim())}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -743,12 +744,11 @@ function MessagesPageContent() {
             <>
             <div className="flex gap-2">
               <Input
-                placeholder="Search by 5-digit UID..."
+                placeholder="Search UID or @username..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 className="flex-1"
-                maxLength={5}
               />
               <Button
                 size="sm"
@@ -783,7 +783,11 @@ function MessagesPageContent() {
                       {searchResult.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      UID: {searchResult.uid}
+                      {searchResult.username
+                        ? `@${searchResult.username}`
+                        : searchResult.uid
+                          ? `UID: ${searchResult.uid}`
+                          : "Student"}
                     </p>
                     {searchResult.university && (
                       <p className="text-xs text-muted-foreground truncate">

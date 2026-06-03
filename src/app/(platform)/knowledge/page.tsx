@@ -79,6 +79,7 @@ export default function KnowledgeHubPage() {
   const [search, setSearch] = useState("");
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [renaming, setRenaming] = useState(false);
@@ -89,6 +90,8 @@ export default function KnowledgeHubPage() {
     university: "",
   });
   const [file, setFile] = useState<File | null>(null);
+  const [multipleFiles, setMultipleFiles] = useState<Array<{ file: File; subject: string; id: string }>>([]);
+  const [uploadMode, setUploadMode] = useState<"single" | "multiple">("single");
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -110,9 +113,25 @@ export default function KnowledgeHubPage() {
     : resources;
 
   async function handleUpload() {
-    if (!uploadForm.title || !uploadForm.type) return;
-    if (!file) { toast.error("Please select a file to upload"); return; }
+    if (!uploadForm.type || !uploadForm.university) {
+      toast.error("Please select type and university");
+      return;
+    }
+    
+    // Check if using multiple files mode
+    if (uploadMode === "multiple") {
+      await handleMultipleUpload();
+      return;
+    }
+    
+    // Single file upload (existing logic)
+    if (!uploadForm.title || !file) {
+      toast.error("Please provide title and select a file");
+      return;
+    }
+    
     setUploading(true);
+    setUploadProgress("Uploading file...");
 
     let fileUrl: string | null = null;
     const formData = new FormData();
@@ -123,10 +142,13 @@ export default function KnowledgeHubPage() {
       const err = await uploadRes.json().catch(() => ({}));
       toast.error(err.error || "File upload failed. Check storage configuration.");
       setUploading(false);
+      setUploadProgress("");
       return;
     }
     const uploadData = await uploadRes.json();
     fileUrl = uploadData.url;
+
+    setUploadProgress("Saving resource...");
 
     const res = await fetch("/api/resources", {
       method: "POST",
@@ -135,7 +157,12 @@ export default function KnowledgeHubPage() {
     });
 
     if (res.ok) {
+      setUploadProgress("Upload successful!");
       toast.success("Resource uploaded successfully!");
+      
+      // Small delay to show success message
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
       setShowUpload(false);
       setUploadForm({ title: "", description: "", type: "NOTES", university: "" });
       setFile(null);
@@ -148,6 +175,114 @@ export default function KnowledgeHubPage() {
       toast.error("Failed to save resource.");
     }
     setUploading(false);
+    setUploadProgress("");
+  }
+
+  async function handleMultipleUpload() {
+    if (multipleFiles.length === 0) {
+      toast.error("Please add files to upload");
+      return;
+    }
+
+    // Validate all files have subjects
+    const missingSubjects = multipleFiles.filter(f => !f.subject.trim());
+    if (missingSubjects.length > 0) {
+      toast.error("Please provide subject names for all files");
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(`Uploading ${multipleFiles.length} file(s)...`);
+
+    try {
+      // Upload files with progress tracking
+      const uploadPromises = multipleFiles.map(async (fileItem, index) => {
+        // Upload file to storage
+        const formData = new FormData();
+        formData.append("file", fileItem.file);
+        formData.append("type", "knowledge");
+        
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+        if (!uploadRes.ok) {
+          throw new Error(`Failed to upload ${fileItem.file.name}`);
+        }
+        const uploadData = await uploadRes.json();
+        
+        // Update progress
+        setUploadProgress(`Uploaded ${index + 1} of ${multipleFiles.length} files...`);
+        
+        return {
+          title: fileItem.subject,
+          description: uploadForm.description || null,
+          type: uploadForm.type,
+          fileUrl: uploadData.url,
+          university: uploadForm.university || null,
+        };
+      });
+
+      const uploadedFiles = await Promise.all(uploadPromises);
+
+      setUploadProgress("Saving resources...");
+
+      // Batch create resources
+      const res = await fetch("/api/resources/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resources: uploadedFiles }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUploadProgress("Upload successful!");
+        toast.success(`${data.count} resources uploaded successfully!`);
+        
+        // Small delay to show success message
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        setShowUpload(false);
+        setUploadForm({ title: "", description: "", type: "NOTES", university: "" });
+        setFile(null);
+        setMultipleFiles([]);
+        setUploadMode("single");
+        
+        // Refresh list
+        const params = new URLSearchParams();
+        if (filter !== "All") params.set("type", filter === "Notes" ? "NOTES" : filter === "Papers" ? "PAPER" : "MATERIAL");
+        const listRes = await fetch(`/api/resources?${params}`);
+        const listData = await listRes.json();
+        setResources(listData.resources || []);
+      } else {
+        toast.error("Failed to save resources.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      setUploadProgress("");
+    }
+  }
+
+  function handleMultipleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newFiles = Array.from(files).map((file) => ({
+      file,
+      subject: "",
+      id: Math.random().toString(36).substring(7),
+    }));
+
+    setMultipleFiles((prev) => [...prev, ...newFiles]);
+  }
+
+  function removeMultipleFile(id: string) {
+    setMultipleFiles((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  function updateFileSubject(id: string, subject: string) {
+    setMultipleFiles((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, subject } : f))
+    );
   }
 
   async function handleDelete(id: string) {
@@ -510,22 +645,15 @@ export default function KnowledgeHubPage() {
 
       {/* Upload Dialog */}
       <Dialog open={showUpload} onOpenChange={setShowUpload}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Upload Resource</DialogTitle>
+            <DialogTitle>Upload Resource(s)</DialogTitle>
             <DialogDescription>
-              Share notes, papers, or study materials with the community
+              Share notes, papers, or study materials with the community. Upload single or multiple files.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Title</Label>
-              <Input
-                value={uploadForm.title}
-                onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
-                placeholder="e.g. Data Structures Notes - Semester 3"
-              />
-            </div>
+            {/* Common fields */}
             <div className="space-y-2">
               <Label>Type</Label>
               <Select
@@ -551,26 +679,146 @@ export default function KnowledgeHubPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>Description (Optional)</Label>
               <Textarea
                 value={uploadForm.description}
                 onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
                 placeholder="Brief description..."
-                rows={3}
+                rows={2}
               />
             </div>
-            <div className="space-y-2">
-              <Label>File</Label>
-              <Input
-                type="file"
-                accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.jpg,.jpeg,.png"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-              />
-              <p className="text-xs text-muted-foreground">PDF, DOC, PPT, ZIP, or images. Max 10MB.</p>
+
+            {/* Upload mode selection */}
+            <div className="border-t pt-4">
+              <div className="flex items-center gap-4 mb-3">
+                <Badge
+                  variant={uploadMode === "single" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => {
+                    setUploadMode("single");
+                    setMultipleFiles([]);
+                    setFile(null);
+                  }}
+                >
+                  Single File
+                </Badge>
+                <Badge
+                  variant={uploadMode === "multiple" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => {
+                    setUploadMode("multiple");
+                    setFile(null);
+                    setUploadForm({ ...uploadForm, title: "" });
+                  }}
+                >
+                  Multiple Files
+                </Badge>
+              </div>
+
+              {uploadMode === "single" ? (
+                // Single file mode
+                <>
+                  <div className="space-y-2 mb-4">
+                    <Label>Title</Label>
+                    <Input
+                      value={uploadForm.title}
+                      onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
+                      placeholder="e.g. Data Structures Notes - Semester 3"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>File</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.jpg,.jpeg,.png"
+                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    />
+                    <p className="text-xs text-muted-foreground">PDF, DOC, PPT, ZIP, or images. Max 10MB.</p>
+                  </div>
+                </>
+              ) : (
+                // Multiple files mode
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Add PDF Files</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf"
+                      multiple
+                      onChange={handleMultipleFileSelect}
+                    />
+                    <p className="text-xs text-muted-foreground">Select multiple PDF files. Max 10MB each.</p>
+                  </div>
+
+                  {multipleFiles.length > 0 && (
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto border rounded-lg p-3">
+                      <Label className="text-sm font-medium">Files to Upload ({multipleFiles.length})</Label>
+                      {multipleFiles.map((fileItem) => (
+                        <div key={fileItem.id} className="flex items-start gap-2 p-2 bg-muted/50 rounded">
+                          <FileText className="h-4 w-4 mt-1 shrink-0 text-muted-foreground" />
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <p className="text-sm font-medium truncate">{fileItem.file.name}</p>
+                            <Input
+                              placeholder="Subject name (e.g., Data Structures)"
+                              value={fileItem.subject}
+                              onChange={(e) => updateFileSubject(fileItem.id, e.target.value)}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeMultipleFile(fileItem.id)}
+                            className="shrink-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <Button onClick={handleUpload} className="w-full" disabled={uploading || !uploadForm.title || !file}>
-              {uploading ? "Uploading..." : "Upload"}
+
+            <Button 
+              onClick={handleUpload} 
+              className="w-full" 
+              disabled={
+                uploading || 
+                !uploadForm.type || 
+                (uploadMode === "single" && (!uploadForm.title || !file)) ||
+                (uploadMode === "multiple" && (multipleFiles.length === 0 || multipleFiles.some(f => !f.subject.trim())))
+              }
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {uploadProgress || "Uploading..."}
+                </>
+              ) : (
+                uploadMode === "multiple" && multipleFiles.length > 0
+                  ? `Upload ${multipleFiles.length} File${multipleFiles.length > 1 ? 's' : ''}`
+                  : 'Upload'
+              )}
             </Button>
+
+            {/* Upload Progress Indicator */}
+            {uploading && (
+              <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                      {uploadProgress || "Processing..."}
+                    </p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                      Please wait, this may take a moment
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

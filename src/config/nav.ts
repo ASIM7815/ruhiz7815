@@ -26,17 +26,17 @@ export const marketingNav = [
 ];
 
 export const platformNav: NavItem[] = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { title: "Profile", href: "/profile", icon: UserCircle },
   { title: "Projects", href: "/projects", icon: FolderKanban },
   { title: "Knowledge Hub", href: "/knowledge", icon: BookOpen },
   { title: "Study Groups", href: "/study-groups", icon: Users },
   { title: "Marketplace", href: "/marketplace", icon: ShoppingBag },
-  { title: "Startups", href: "/startups", icon: Rocket },
+  // { title: "Startups", href: "/startups", icon: Rocket }, // Hidden - code preserved
 ];
 
 export const platformSecondaryNav: NavItem[] = [
   { title: "Messages", href: "/messages", icon: MessageSquare },
   { title: "Notifications", href: "/notifications", icon: Bell },
-  { title: "Profile", href: "/profile", icon: UserCircle },
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Settings", href: "/settings", icon: Settings },
 ];

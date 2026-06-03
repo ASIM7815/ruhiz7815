@@ -13,15 +13,19 @@
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   uid TEXT UNIQUE,
+  username TEXT UNIQUE,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   email_verified TIMESTAMPTZ,
   password TEXT,
   image TEXT,
+  cover_image TEXT,
+  headline TEXT,
   bio TEXT,
   university TEXT,
   role TEXT NOT NULL DEFAULT 'MEMBER',
   reputation INTEGER NOT NULL DEFAULT 0,
+  college_verified BOOLEAN NOT NULL DEFAULT false,
   onboarding_complete BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -74,6 +78,49 @@ CREATE TABLE IF NOT EXISTS user_interests (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   interest TEXT NOT NULL,
   UNIQUE(user_id, interest)
+);
+
+-- Follow graph
+CREATE TABLE IF NOT EXISTS followers (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (follower_id <> following_id),
+  UNIQUE(follower_id, following_id)
+);
+
+-- Profile achievements
+CREATE TABLE IF NOT EXISTS achievements (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  icon TEXT,
+  type TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Student reputation endorsements
+CREATE TABLE IF NOT EXISTS endorsements (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  receiver_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  giver_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (receiver_id <> giver_id),
+  UNIQUE(receiver_id, giver_id, label)
+);
+
+-- Profile activity feed
+CREATE TABLE IF NOT EXISTS activities (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT,
+  href TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- ============================================
@@ -239,9 +286,16 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- User indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_uid ON users(uid);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
+CREATE INDEX IF NOT EXISTS idx_followers_following_id ON followers(following_id);
+CREATE INDEX IF NOT EXISTS idx_followers_follower_id ON followers(follower_id);
+CREATE INDEX IF NOT EXISTS idx_achievements_user_id ON achievements(user_id);
+CREATE INDEX IF NOT EXISTS idx_endorsements_receiver_id ON endorsements(receiver_id);
+CREATE INDEX IF NOT EXISTS idx_endorsements_giver_id ON endorsements(giver_id);
+CREATE INDEX IF NOT EXISTS idx_activities_user_id_created_at ON activities(user_id, created_at DESC);
 
 -- Project indexes
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
@@ -280,6 +334,10 @@ ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE verification_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_interests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE followers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE endorsements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_members ENABLE ROW LEVEL SECURITY;
@@ -337,6 +395,40 @@ CREATE POLICY "Anyone can view user interests" ON user_interests
   FOR SELECT USING (true);
 
 CREATE POLICY "Users can manage their own interests" ON user_interests
+  FOR ALL USING (user_id = auth.uid()::text);
+
+-- Followers: Everyone can view, users manage their own following rows
+CREATE POLICY "Anyone can view followers" ON followers
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can follow others" ON followers
+  FOR INSERT WITH CHECK (follower_id = auth.uid()::text);
+
+CREATE POLICY "Users can unfollow others" ON followers
+  FOR DELETE USING (follower_id = auth.uid()::text);
+
+-- Achievements: Everyone can view, owners manage their own achievement rows
+CREATE POLICY "Anyone can view achievements" ON achievements
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can manage their own achievements" ON achievements
+  FOR ALL USING (user_id = auth.uid()::text);
+
+-- Endorsements: Everyone can view, users manage endorsements they give
+CREATE POLICY "Anyone can view endorsements" ON endorsements
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can create endorsements" ON endorsements
+  FOR INSERT WITH CHECK (giver_id = auth.uid()::text);
+
+CREATE POLICY "Users can remove endorsements they gave" ON endorsements
+  FOR DELETE USING (giver_id = auth.uid()::text);
+
+-- Activities: Everyone can view profile activity
+CREATE POLICY "Anyone can view activities" ON activities
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can manage their own activity" ON activities
   FOR ALL USING (user_id = auth.uid()::text);
 
 -- Projects: Everyone can view, authenticated users can create

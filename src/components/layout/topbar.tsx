@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { useRouter } from "next/navigation";
 import { Search, Bell, Sun, Moon, X } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -12,23 +13,27 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function Topbar() {
-  const { user } = useSupabaseUser();
+  const { user: supabaseUser } = useSupabaseUser();
+  const { user: dbUser } = useCurrentUser();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
-  const [searchUid, setSearchUid] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<{
     id: string;
-    uid: string;
+    uid: string | null;
+    username: string | null;
     name: string;
     image: string | null;
     university: string | null;
+    profilePath: string;
   } | null>(null);
   const [searching, setSearching] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
-  const userImage = user?.user_metadata?.avatar_url ?? undefined;
-  const userName = user?.user_metadata?.full_name ?? "";
+  // Use database user data if available (for real-time sync), fallback to Supabase
+  const userImage = dbUser?.image || supabaseUser?.user_metadata?.avatar_url || undefined;
+  const userName = dbUser?.name || supabaseUser?.user_metadata?.full_name || "";
   const userInitials = userName
     .split(" ")
     .map((n: string) => n[0])
@@ -37,11 +42,12 @@ export function Topbar() {
     .toUpperCase();
 
   async function handleSearch(value: string) {
-    setSearchUid(value);
-    if (/^\d{5}$/.test(value)) {
+    setSearchQuery(value);
+    const query = value.trim();
+    if (query.length >= 2) {
       setSearching(true);
       try {
-        const res = await fetch(`/api/users/search?uid=${value}`);
+        const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
         if (res.ok) {
           const data = await res.json();
           setSearchResult(data);
@@ -64,14 +70,12 @@ export function Topbar() {
     <div className="relative">
       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        placeholder="Search by 5-digit UID..."
+        placeholder="Search people, UID, @username..."
         className="h-10 bg-muted/50 pl-10 sm:h-9 sm:border-0"
-        value={searchUid}
+        value={searchQuery}
         onChange={(e) => handleSearch(e.target.value)}
         onBlur={() => setTimeout(() => setShowResult(false), 200)}
         onFocus={() => searchResult && setShowResult(true)}
-        inputMode="numeric"
-        maxLength={5}
       />
       {showResult && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-background p-2 shadow-lg">
@@ -81,9 +85,9 @@ export function Topbar() {
             <button
               className="flex w-full items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-muted"
               onClick={() => {
-                router.push(`/students/${searchResult.uid}`);
+                router.push(searchResult.profilePath || `/students/${searchResult.uid}`);
                 setShowResult(false);
-                setSearchUid("");
+                setSearchQuery("");
                 setMobileSearchOpen(false);
               }}
             >
@@ -98,7 +102,11 @@ export function Topbar() {
                   {searchResult.name}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  #{searchResult.uid}
+                  {searchResult.username
+                    ? `@${searchResult.username}`
+                    : searchResult.uid
+                      ? `#${searchResult.uid}`
+                      : "Student"}
                   {searchResult.university ? ` · ${searchResult.university}` : ""}
                 </p>
               </div>

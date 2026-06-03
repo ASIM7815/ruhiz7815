@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { signOut, useSupabaseUser } from "@/hooks/use-supabase-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ import {
 } from "@/components/ui/sheet";
 
 const primaryItems = [
-  { title: "Home", href: "/dashboard", icon: Home },
+  { title: "Profile", href: "/profile", icon: UserCircle },
   { title: "Projects", href: "/projects", icon: FolderKanban },
   { title: "Knowledge", href: "/knowledge", icon: BookOpen },
   { title: "Messages", href: "/messages", icon: MessageSquare },
@@ -39,9 +40,9 @@ const primaryItems = [
 const moreItems = [
   { title: "Study Groups", href: "/study-groups", icon: Users },
   { title: "Marketplace", href: "/marketplace", icon: ShoppingBag },
-  { title: "Startup Hub", href: "/startups", icon: Rocket },
+  // { title: "Startup Hub", href: "/startups", icon: Rocket }, // Hidden - code preserved
   { title: "Notifications", href: "/notifications", icon: Bell },
-  { title: "Profile", href: "/profile", icon: UserCircle },
+  { title: "Home", href: "/dashboard", icon: Home },
   { title: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -51,10 +52,13 @@ function isActive(pathname: string, href: string) {
 
 export function MobileNav() {
   const pathname = usePathname();
-  const { user } = useSupabaseUser();
-  const userName = user?.user_metadata?.full_name ?? "Student";
-  const userEmail = user?.email ?? "";
-  const userImage = user?.user_metadata?.avatar_url ?? undefined;
+  const { user: supabaseUser } = useSupabaseUser();
+  const { user: dbUser } = useCurrentUser();
+  
+  // Use database user data if available (for real-time sync), fallback to Supabase
+  const userName = dbUser?.name || supabaseUser?.user_metadata?.full_name || "Student";
+  const userEmail = dbUser?.email || supabaseUser?.email || "";
+  const userImage = dbUser?.image || supabaseUser?.user_metadata?.avatar_url || undefined;
   const userInitials =
     userName
       .split(" ")

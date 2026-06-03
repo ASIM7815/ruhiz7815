@@ -14,15 +14,19 @@ datasource db {
 model User {
   id                 String    @id @default(cuid())
   uid                String?   @unique
+  username           String?   @unique
   name               String
   email              String    @unique
   emailVerified      DateTime?  @map("email_verified")
   password           String?
   image              String?
+  coverImage         String?   @map("cover_image")
+  headline           String?
   bio                String?
   university         String?
   role               String    @default("MEMBER") // LEADER, MEMBER, BOTH
   reputation         Int       @default(0)
+  collegeVerified    Boolean   @default(false) @map("college_verified")
   onboardingComplete Boolean   @default(false) @map("onboarding_complete")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
@@ -39,6 +43,12 @@ model User {
   resources        Resource[]
   listings         Listing[]
   startups         Startup[]
+  followers        Follow[]      @relation("UserFollowers")
+  following        Follow[]      @relation("UserFollowing")
+  achievements     Achievement[]
+  activities       Activity[]
+  endorsementsReceived Endorsement[] @relation("EndorsementReceiver")
+  endorsementsGiven    Endorsement[] @relation("EndorsementGiver")
   studyGroupMembers StudyGroupMember[]
   joinRequests       JoinRequest[]
   startupMembers     StartupMember[]
@@ -46,6 +56,65 @@ model User {
   studyGroupJoinRequests StudyGroupJoinRequest[]
 
   @@map("users")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("followers")
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  title       String
+  description String?
+  icon        String?
+  type        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("achievements")
+}
+
+model Endorsement {
+  id         String   @id @default(cuid())
+  receiverId String   @map("receiver_id")
+  giverId    String   @map("giver_id")
+  label      String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  receiver User @relation("EndorsementReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  giver    User @relation("EndorsementGiver", fields: [giverId], references: [id], onDelete: Cascade)
+
+  @@unique([receiverId, giverId, label])
+  @@index([giverId])
+  @@map("endorsements")
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String
+  title     String
+  message   String?
+  href      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("activities")
 }
 
 model Account {

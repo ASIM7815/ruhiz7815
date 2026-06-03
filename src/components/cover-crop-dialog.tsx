@@ -5,19 +5,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { ZoomIn, RotateCw } from "lucide-react";
 
-interface ImageCropDialogProps {
+interface CoverCropDialogProps {
   open: boolean;
   onClose: () => void;
   imageSrc: string;
   onCropComplete: (croppedImage: Blob) => void;
 }
 
-export function ImageCropDialog({
+export function CoverCropDialog({
   open,
   onClose,
   imageSrc,
   onCropComplete,
-}: ImageCropDialogProps) {
+}: CoverCropDialogProps) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [positionX, setPositionX] = useState(0);
@@ -42,52 +42,47 @@ export function ImageCropDialog({
     img.crossOrigin = "anonymous";
     
     img.onload = () => {
-      // Use high-resolution output (800x800) for better quality
-      const outputSize = 800;
-      canvas.width = outputSize;
-      canvas.height = outputSize;
+      // Use high-resolution output for cover images (1200x400 - 3:1 aspect ratio)
+      const outputWidth = 1200;
+      const outputHeight = 400;
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
 
       // Enable high-quality image smoothing
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
 
-      ctx.clearRect(0, 0, outputSize, outputSize);
-      
-      // Create circular clipping path
-      ctx.beginPath();
-      ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      
+      ctx.clearRect(0, 0, outputWidth, outputHeight);
       ctx.save();
       
       // Apply transformations
-      ctx.translate(outputSize / 2 + positionX * 2, outputSize / 2 + positionY * 2);
+      ctx.translate(outputWidth / 2 + positionX * 2, outputHeight / 2 + positionY * 2);
       ctx.rotate((rotation * Math.PI) / 180);
 
       // Calculate dimensions to maintain aspect ratio
       const imgAspect = img.width / img.height;
+      const targetAspect = outputWidth / outputHeight;
       let drawWidth, drawHeight;
 
-      if (imgAspect > 1) {
-        // Landscape image
-        drawWidth = outputSize * zoom;
-        drawHeight = drawWidth / imgAspect;
-      } else {
-        // Portrait or square image
-        drawHeight = outputSize * zoom;
+      if (imgAspect > targetAspect) {
+        // Image is wider than target - fit to height
+        drawHeight = outputHeight * zoom;
         drawWidth = drawHeight * imgAspect;
+      } else {
+        // Image is taller than target - fit to width
+        drawWidth = outputWidth * zoom;
+        drawHeight = drawWidth / imgAspect;
       }
 
       ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       ctx.restore();
 
-      // Use high quality PNG encoding to preserve transparency for circular shape
+      // Use high quality JPEG encoding (0.95 quality)
       canvas.toBlob((blob) => {
         if (blob) {
           onCropComplete(blob);
         }
-      }, "image/png", 1.0);
+      }, "image/jpeg", 0.95);
     };
 
     img.src = imageSrc;
@@ -101,13 +96,13 @@ export function ImageCropDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Crop Profile Picture</DialogTitle>
+          <DialogTitle>Crop Cover Image</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="relative bg-muted rounded-lg overflow-hidden aspect-square">
+          <div className="relative bg-muted rounded-lg overflow-hidden" style={{ aspectRatio: '3/1' }}>
             <div className="absolute inset-0 flex items-center justify-center p-4">
               {imageSrc && (
                 <div
@@ -125,7 +120,7 @@ export function ImageCropDialog({
             </div>
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute inset-0 bg-black/40" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg w-4/5 aspect-square" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-2 border-white shadow-lg w-[90%] h-[80%]" />
             </div>
           </div>
 
@@ -188,16 +183,16 @@ export function ImageCropDialog({
                 </div>
                 <input
                   type="range"
-                  min="-100"
-                  max="100"
+                  min="-200"
+                  max="200"
                   step="5"
                   value={positionX}
                   onChange={(e) => setPositionX(parseInt(e.target.value))}
                   className="w-full h-1 bg-muted rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>-100px</span>
-                  <span>+100px</span>
+                  <span>-200px</span>
+                  <span>+200px</span>
                 </div>
               </div>
 

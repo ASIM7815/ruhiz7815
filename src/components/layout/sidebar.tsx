@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useSupabaseUser, signOut } from "@/hooks/use-supabase-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import {
   ChevronLeft,
   ChevronRight,
@@ -185,10 +186,13 @@ function SidebarNavItems({
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const { user } = useSupabaseUser();
-  const userName = user?.user_metadata?.full_name ?? "";
-  const userEmail = user?.email ?? "";
-  const userImage = user?.user_metadata?.avatar_url ?? undefined;
+  const { user: supabaseUser } = useSupabaseUser();
+  const { user: dbUser } = useCurrentUser();
+  
+  // Use database user data if available (for real-time sync), fallback to Supabase
+  const userName = dbUser?.name || supabaseUser?.user_metadata?.full_name || "";
+  const userEmail = dbUser?.email || supabaseUser?.email || "";
+  const userImage = dbUser?.image || supabaseUser?.user_metadata?.avatar_url || undefined;
   const userInitials = userName
     .split(" ")
     .map((n: string) => n[0])

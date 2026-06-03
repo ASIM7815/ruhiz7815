@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { normalizeUsername } from "@/lib/profile-identity";
 import {
   Select,
   SelectContent,
@@ -17,15 +18,50 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function OnboardingPage() {
-  const { user, loading: authLoading } = useSupabaseUser();
+  const { user } = useSupabaseUser();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
+    username: "",
     name: user?.user_metadata?.full_name || "",
+    headline: "",
     bio: "",
     university: "",
     role: "MEMBER",
+    skillsText: "",
+    interestsText: "",
   });
+
+  useEffect(() => {
+    if (!user) return;
+
+    setForm((current) => {
+      if (current.name || current.username) return current;
+
+      const name =
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.email?.split("@")[0] ||
+        "";
+
+      return {
+        ...current,
+        name,
+        username: normalizeUsername(name || user.email || ""),
+      };
+    });
+  }, [user]);
+
+  function parseTags(value: string) {
+    return Array.from(
+      new Set(
+        value
+          .split(/[,\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 12);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +70,17 @@ export default function OnboardingPage() {
       const res = await fetch("/api/user/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, onboardingComplete: true }),
+        body: JSON.stringify({
+          username: form.username || undefined,
+          name: form.name,
+          headline: form.headline,
+          bio: form.bio,
+          university: form.university,
+          role: form.role,
+          skills: parseTags(form.skillsText),
+          interests: parseTags(form.interestsText),
+          onboardingComplete: true,
+        }),
       });
       if (!res.ok) throw new Error("Failed to save profile");
       router.push("/dashboard");
@@ -61,12 +107,32 @@ export default function OnboardingPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  placeholder="asimsaad"
+                  value={form.username}
+                  onChange={(e) => setForm({ ...form, username: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
                 <Input
                   id="name"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="headline">Headline</Label>
+                <Input
+                  id="headline"
+                  placeholder="CSE Student · Building Ruhiz"
+                  maxLength={120}
+                  value={form.headline}
+                  onChange={(e) => setForm({ ...form, headline: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -90,6 +156,28 @@ export default function OnboardingPage() {
                     <SelectItem value="BOTH">Both</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="skills">Skills</Label>
+                  <Textarea
+                    id="skills"
+                    placeholder="Python, JavaScript, React"
+                    value={form.skillsText}
+                    onChange={(e) => setForm({ ...form, skillsText: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="interests">Interests</Label>
+                  <Textarea
+                    id="interests"
+                    placeholder="AI, Cloud, Hackathons"
+                    value={form.interestsText}
+                    onChange={(e) => setForm({ ...form, interestsText: e.target.value })}
+                    rows={3}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bio">Bio</Label>

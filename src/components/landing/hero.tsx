@@ -10,7 +10,7 @@ const vibes = [
   "build projects together 🔨",
   "find your co-founder 🤝",
   "share knowledge freely 📚",
-  "launch startups early 🚀",
+  // "launch startups early 🚀", // Hidden - code preserved
   "grow your network 🌐",
   "learn by doing 💡",
 ];
@@ -61,7 +61,7 @@ export function Hero() {
             className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed"
           >
             Find teammates with AI matching, build real-world projects, share
-            knowledge, and launch startups — all in one platform.
+            knowledge, and collaborate — all in one platform.
           </motion.p>
 
           {/* CTAs */}

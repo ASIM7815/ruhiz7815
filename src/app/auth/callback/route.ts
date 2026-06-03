@@ -1,9 +1,42 @@
 import { createClient } from "@/lib/supabase-auth-server";
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { usernameSeedFromName } from "@/lib/profile-identity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+async function generateUniqueUid() {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const uid = String(Math.floor(10000 + Math.random() * 90000));
+    const existing = await db.user.findUnique({
+      where: { uid },
+      select: { id: true },
+    });
+
+    if (!existing) return uid;
+  }
+
+  return String(Date.now()).slice(-5);
+}
+
+async function generateUniqueUsername(nameOrEmail: string) {
+  const seed = usernameSeedFromName(nameOrEmail);
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const suffix = attempt === 0 ? "" : `_${Math.floor(100 + Math.random() * 9000)}`;
+    const username = `${seed}${suffix}`.slice(0, 30);
+    const existing = await db.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+
+    if (!existing) return username;
+  }
+
+  return `student_${String(Date.now()).slice(-8)}`;
+}
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -71,7 +104,7 @@ export async function GET(request: Request) {
 
       if (!dbUser) {
         // Create new user with Supabase ID and unique UID
-        const uid = String(Math.floor(10000 + Math.random() * 90000));
+        const uid = await generateUniqueUid();
         
         // Extract name based on provider
         let userName = supabaseUser.email!.split("@")[0];
@@ -82,10 +115,12 @@ export async function GET(request: Request) {
         }
         
         // Extract avatar based on provider
-        let avatarUrl = supabaseUser.user_metadata.avatar_url || supabaseUser.user_metadata.picture;
+        const avatarUrl = supabaseUser.user_metadata.avatar_url || supabaseUser.user_metadata.picture;
+        const username = await generateUniqueUsername(userName || supabaseUser.email!);
         
         console.log("[auth/callback] Creating new user:", {
           uid,
+          username,
           name: userName,
           email: supabaseUser.email,
           provider
@@ -98,6 +133,7 @@ export async function GET(request: Request) {
             name: userName,
             image: avatarUrl,
             uid,
+            username,
             emailVerified: supabaseUser.email_confirmed_at ? new Date(supabaseUser.email_confirmed_at) : null,
             onboardingComplete: false,
           },
@@ -125,13 +161,17 @@ export async function GET(request: Request) {
             data: {
               id: supabaseUser.id,
               uid: oldUserData.uid,
+              username: oldUserData.username,
               email: oldUserData.email,
               name: oldUserData.name,
               image: oldUserData.image,
+              coverImage: oldUserData.coverImage,
+              headline: oldUserData.headline,
               bio: oldUserData.bio,
               university: oldUserData.university,
               role: oldUserData.role,
               reputation: oldUserData.reputation,
+              collegeVerified: oldUserData.collegeVerified,
               emailVerified: oldUserData.emailVerified,
               onboardingComplete: oldUserData.onboardingComplete,
             },
@@ -141,7 +181,7 @@ export async function GET(request: Request) {
         }
         
         // Update user info if needed
-        const updates: any = {};
+        const updates: Prisma.UserUpdateInput = {};
         
         if (provider === 'google') {
           const newName = supabaseUser.user_metadata.full_name || supabaseUser.user_metadata.name;
@@ -153,6 +193,10 @@ export async function GET(request: Request) {
           const newAvatar = supabaseUser.user_metadata.avatar_url;
           if (newName && newName !== dbUser.name) updates.name = newName;
           if (newAvatar && newAvatar !== dbUser.image) updates.image = newAvatar;
+        }
+        if (!dbUser.uid) updates.uid = await generateUniqueUid();
+        if (!dbUser.username) {
+          updates.username = await generateUniqueUsername(dbUser.name || dbUser.email);
         }
         
         if (Object.keys(updates).length > 0) {

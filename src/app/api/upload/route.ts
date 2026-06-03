@@ -30,7 +30,7 @@ function resolveMime(file: File): string {
 
 // File size limits by type
 const LIMITS: Record<string, number> = {
-  avatar: 2 * 1024 * 1024,        // 2MB for avatars
+  avatar: 10 * 1024 * 1024,       // 10MB for avatars and cover images (high-res PNG)
   project: 10 * 1024 * 1024,      // 10MB for project files
   knowledge: 10 * 1024 * 1024,    // 10MB for knowledge hub
   marketplace: 5 * 1024 * 1024,   // 5MB for marketplace images

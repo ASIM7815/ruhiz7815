@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   Bell,
@@ -31,14 +32,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImageCropDialog } from "@/components/image-crop-dialog";
+import { CoverCropDialog } from "@/components/cover-crop-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { broadcastProfileUpdate } from "@/hooks/use-profile-sync";
 
 interface UserProfile {
   id: string;
   uid: string | null;
+  username: string | null;
   name: string;
   email: string;
   image: string | null;
+  coverImage: string | null;
+  headline: string | null;
   bio: string | null;
   university: string | null;
   role: string;
@@ -48,20 +54,29 @@ interface UserProfile {
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [copied, setCopied] = useState(false);
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [coverCropDialogOpen, setCoverCropDialogOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedCoverImage, setSelectedCoverImage] = useState<string | null>(null);
   const [form, setForm] = useState({
+    username: "",
     name: "",
+    headline: "",
     bio: "",
     university: "",
     role: "MEMBER",
+    skillsText: "",
+    interestsText: "",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/user/me")
@@ -69,14 +84,29 @@ export default function SettingsPage() {
       .then((data) => {
         setProfile(data);
         setForm({
+          username: data.username || "",
           name: data.name || "",
+          headline: data.headline || "",
           bio: data.bio || "",
           university: data.university || "",
           role: data.role || "MEMBER",
+          skillsText: (data.skills || []).join(", "),
+          interestsText: (data.interests || []).join(", "),
         });
         setLoading(false);
       });
   }, []);
+
+  function parseTags(value: string) {
+    return Array.from(
+      new Set(
+        value
+          .split(/[,\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 20);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -84,21 +114,59 @@ export default function SettingsPage() {
       const res = await fetch("/api/user/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          username: form.username,
+          name: form.name,
+          headline: form.headline,
+          bio: form.bio,
+          university: form.university,
+          role: form.role,
+          skills: parseTags(form.skillsText),
+          interests: parseTags(form.interestsText),
+        }),
       });
       
       if (res.ok) {
+        const updated = await res.json();
+        const skills = parseTags(form.skillsText);
+        const interests = parseTags(form.interestsText);
+        
+        setProfile((current) =>
+          current
+            ? {
+                ...current,
+                ...updated,
+                skills,
+                interests,
+              }
+            : current
+        );
+        
+        // Broadcast profile update for real-time sync
+        if (profile?.id) {
+          broadcastProfileUpdate(profile.id, {
+            name: form.name,
+            headline: form.headline || null,
+            bio: form.bio || null,
+            username: form.username || null,
+            university: form.university || null,
+            skills,
+            interests,
+          });
+        }
+        
         toast({
           title: "Success!",
           description: "Your profile has been updated.",
         });
       } else {
-        throw new Error("Failed to save");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to save");
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to save changes. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to save changes. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -120,11 +188,11 @@ export default function SettingsPage() {
       return;
     }
 
-    // Validate file size (2MB)
-    if (file.size > 2 * 1024 * 1024) {
+    // Validate file size (10MB for high-res PNG)
+    if (file.size > 10 * 1024 * 1024) {
       toast({
         title: "File too large",
-        description: "Image must be less than 2MB.",
+        description: "Image must be less than 10MB.",
         variant: "destructive",
       });
       return;
@@ -143,24 +211,44 @@ export default function SettingsPage() {
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", croppedBlob, "avatar.jpg");
+      // Use .png extension for circular images with transparency
+      formData.append("file", croppedBlob, "avatar.png");
+      formData.append("type", "avatar");
       
-      const res = await fetch("/api/user/me/avatar", {
-        method: "PATCH",
+      const res = await fetch("/api/upload", {
+        method: "POST",
         body: formData,
       });
       
       if (res.ok) {
-        const { image } = await res.json();
-        setProfile((p) => (p ? { ...p, image } : p));
-        toast({
-          title: "Success!",
-          description: "Profile photo updated successfully.",
+        const { url } = await res.json();
+        
+        // Update user profile with new image
+        const updateRes = await fetch("/api/user/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: url }),
         });
+        
+        if (updateRes.ok) {
+          setProfile((p) => (p ? { ...p, image: url } : p));
+          
+          // Broadcast profile image update for real-time sync
+          if (profile?.id) {
+            broadcastProfileUpdate(profile.id, { image: url });
+          }
+          
+          toast({
+            title: "Success!",
+            description: "Profile photo updated successfully.",
+          });
+          // Refresh the router to update all pages with new image
+          router.refresh();
+        }
       } else {
         throw new Error("Upload failed");
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Upload failed",
         description: "Failed to upload image. Please try again.",
@@ -170,6 +258,95 @@ export default function SettingsPage() {
       setUploading(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  function handleCoverFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Increased to 10MB for cover images (higher resolution)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Cover image must be less than 10MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setSelectedCoverImage(e.target?.result as string);
+      setCoverCropDialogOpen(true);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleCoverCropComplete(croppedBlob: Blob) {
+    setUploadingCover(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", croppedBlob, "cover.jpg");
+      formData.append("type", "avatar");
+      
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(errorData.error || "Upload failed");
+      }
+      
+      const { url } = await res.json();
+      
+      const updateRes = await fetch("/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coverImage: url }),
+      });
+      
+      if (!updateRes.ok) {
+        const errorData = await updateRes.json().catch(() => ({ error: "Failed to update profile" }));
+        throw new Error(errorData.error || "Failed to update profile");
+      }
+      
+      setProfile((p) => (p ? { ...p, coverImage: url } : p));
+      
+      // Broadcast cover image update for real-time sync
+      if (profile?.id) {
+        broadcastProfileUpdate(profile.id, { coverImage: url });
+      }
+      
+      toast({
+        title: "Success!",
+        description: "Cover image updated successfully.",
+      });
+      // Refresh the router to update all pages with new cover image
+      router.refresh();
+    } catch (error) {
+      console.error("Cover upload error:", error);
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Failed to upload cover image. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingCover(false);
+      if (coverFileInputRef.current) {
+        coverFileInputRef.current.value = "";
       }
     }
   }
@@ -240,6 +417,77 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Cover Image Upload */}
+              <div className="space-y-3">
+                <Label>Cover Image</Label>
+                <div className="relative overflow-hidden rounded-lg border bg-muted h-32 sm:h-40">
+                  {profile?.coverImage ? (
+                    <img
+                      src={profile.coverImage}
+                      alt="Cover"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      <div className="text-center">
+                        <Upload className="mx-auto h-8 w-8 mb-2" />
+                        <p className="text-sm">No cover image</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={coverFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  className="hidden"
+                  onChange={handleCoverFileSelect}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => coverFileInputRef.current?.click()}
+                    disabled={uploadingCover}
+                  >
+                    {uploadingCover ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        {profile?.coverImage ? "Change Cover" : "Upload Cover"}
+                      </>
+                    )}
+                  </Button>
+                  {profile?.coverImage && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        const res = await fetch("/api/user/me", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ coverImage: null }),
+                        });
+                        if (res.ok) {
+                          setProfile((p) => (p ? { ...p, coverImage: null } : p));
+                          toast({ title: "Cover image removed" });
+                        }
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Recommended: 1200x400px. JPG, PNG or GIF. Max 10MB.
+                </p>
+              </div>
+
+              {/* Profile Photo Upload */}
               <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <Avatar className="h-20 w-20 border-2 border-primary/20">
                   <AvatarImage src={profile?.image || undefined} />
@@ -275,12 +523,12 @@ export default function SettingsPage() {
                     )}
                   </Button>
                   <p className="text-xs text-muted-foreground mt-1">
-                    JPG, PNG or GIF. Max 2MB.
+                    JPG, PNG or GIF. Max 10MB.
                   </p>
                 </div>
               </div>
 
-              {/* Image Crop Dialog */}
+              {/* Image Crop Dialogs */}
               {selectedImage && (
                 <ImageCropDialog
                   open={cropDialogOpen}
@@ -292,8 +540,34 @@ export default function SettingsPage() {
                   onCropComplete={handleCropComplete}
                 />
               )}
+              
+              {selectedCoverImage && (
+                <CoverCropDialog
+                  open={coverCropDialogOpen}
+                  onClose={() => {
+                    setCoverCropDialogOpen(false);
+                    setSelectedCoverImage(null);
+                  }}
+                  imageSrc={selectedCoverImage}
+                  onCropComplete={handleCoverCropComplete}
+                />
+              )}
 
               <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    placeholder="asimsaad"
+                    value={form.username}
+                    onChange={(e) =>
+                      setForm({ ...form, username: e.target.value })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Your public link is /u/{form.username || "username"}.
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
                   <Input
@@ -311,6 +585,18 @@ export default function SettingsPage() {
                     value={profile?.email || ""}
                     disabled
                     className="opacity-60"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="headline">Headline</Label>
+                  <Input
+                    id="headline"
+                    placeholder="CSE Student · Building Ruhiz"
+                    maxLength={120}
+                    value={form.headline}
+                    onChange={(e) =>
+                      setForm({ ...form, headline: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -339,6 +625,33 @@ export default function SettingsPage() {
                       <SelectItem value="BOTH">Both</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="skills">Skills</Label>
+                  <Textarea
+                    id="skills"
+                    placeholder="Python, JavaScript, React, AWS"
+                    value={form.skillsText}
+                    onChange={(e) =>
+                      setForm({ ...form, skillsText: e.target.value })
+                    }
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="interests">Interests</Label>
+                  <Textarea
+                    id="interests"
+                    placeholder="AI, Cloud, Startups, Hackathons"
+                    value={form.interestsText}
+                    onChange={(e) =>
+                      setForm({ ...form, interestsText: e.target.value })
+                    }
+                    rows={3}
+                  />
                 </div>
               </div>
 

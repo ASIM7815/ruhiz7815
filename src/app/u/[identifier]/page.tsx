@@ -16,5 +16,5 @@ export default async function SharedProfilePage({
 
   if (!profile) notFound();
 
-  return <ProfileSyncWrapper initialProfile={profile} viewerId={viewer?.id} publicShell />;
+  return <ProfileSyncWrapper initialProfile={profile} viewerId={viewer?.id ?? null} publicShell />;
 }

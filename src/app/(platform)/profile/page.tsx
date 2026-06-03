@@ -13,5 +13,5 @@ export default async function ProfilePage() {
   const profile = await getStudentProfile(viewer.id, viewer.id);
   if (!profile) redirect("/onboarding");
 
-  return <ProfileSyncWrapper initialProfile={profile} viewerId={viewer.id} />;
+  return <ProfileSyncWrapper initialProfile={profile} viewerId={viewer.id ?? null} />;
 }

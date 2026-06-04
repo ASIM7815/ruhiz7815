@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth } from "@/lib/auth/api-middleware";
 import { uploadToGCS, GCS_FOLDERS } from "@/lib/gcs";
+import { uploadRateLimit } from "@/lib/rate-limit";
+import { handleApiError, ValidationError } from "@/lib/api-errors";
 import path from "path";
 
 export const runtime = "nodejs";
@@ -76,60 +78,58 @@ const ALLOWED_TYPES: Record<string, string[]> = {
 };
 
 export async function POST(req: NextRequest) {
-  const { user, error, status } = await requireAuth();
-  if (error || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const formData = await req.formData();
-  const file = formData.get("file") as File | null;
-  const type = formData.get("type") as string | null; // avatar, project, knowledge, marketplace, directMessage, groupChat
-  const entityId = formData.get("entityId") as string | null; // optional: projectId, groupId, etc.
-
-  if (!file || !type || !LIMITS[type]) {
-    return NextResponse.json({ error: "Missing file or invalid type" }, { status: 400 });
-  }
-
-  // Resolve MIME — browsers on Linux sometimes report empty file.type
-  const mimeType = resolveMime(file);
-
-  if (!ALLOWED_TYPES[type].includes(mimeType)) {
-    return NextResponse.json({ error: `File type "${mimeType}" not allowed for ${type}` }, { status: 400 });
-  }
-
-  if (file.size > LIMITS[type]) {
-    const limitMB = (LIMITS[type] / (1024 * 1024)).toFixed(0);
-    return NextResponse.json({ error: `File too large. Maximum ${limitMB}MB allowed` }, { status: 400 });
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  // Map upload type to GCS folder
-  let folder: keyof typeof GCS_FOLDERS;
-  switch (type) {
-    case "avatar":
-      folder = "PROFILES";
-      break;
-    case "project":
-      folder = "PROJECTS";
-      break;
-    case "knowledge":
-      folder = "KNOWLEDGE_HUB";
-      break;
-    case "marketplace":
-      folder = "MARKETPLACE";
-      break;
-    case "directMessage":
-      folder = "DIRECT_MESSAGES";
-      break;
-    case "groupChat":
-      folder = "GROUP_CHAT";
-      break;
-    default:
-      return NextResponse.json({ error: "Invalid upload type" }, { status: 400 });
-  }
-
   try {
+    const user = await requireAuth();
+    await uploadRateLimit(user.id);
+
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const type = formData.get("type") as string | null; // avatar, project, knowledge, marketplace, directMessage, groupChat
+    const entityId = formData.get("entityId") as string | null; // optional: projectId, groupId, etc.
+
+    if (!file || !type || !LIMITS[type]) {
+      throw new ValidationError("Missing file or invalid type");
+    }
+
+    // Resolve MIME — browsers on Linux sometimes report empty file.type
+    const mimeType = resolveMime(file);
+
+    if (!ALLOWED_TYPES[type].includes(mimeType)) {
+      throw new ValidationError(`File type "${mimeType}" not allowed for ${type}`);
+    }
+
+    if (file.size > LIMITS[type]) {
+      const limitMB = (LIMITS[type] / (1024 * 1024)).toFixed(0);
+      throw new ValidationError(`File too large. Maximum ${limitMB}MB allowed`);
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Map upload type to GCS folder
+    let folder: keyof typeof GCS_FOLDERS;
+    switch (type) {
+      case "avatar":
+        folder = "PROFILES";
+        break;
+      case "project":
+        folder = "PROJECTS";
+        break;
+      case "knowledge":
+        folder = "KNOWLEDGE_HUB";
+        break;
+      case "marketplace":
+        folder = "MARKETPLACE";
+        break;
+      case "directMessage":
+        folder = "DIRECT_MESSAGES";
+        break;
+      case "groupChat":
+        folder = "GROUP_CHAT";
+        break;
+      default:
+        throw new ValidationError("Invalid upload type");
+    }
+
     // Upload to GCS — use resolved mimeType (handles empty file.type)
     const url = await uploadToGCS(buffer, file.name, mimeType, folder, user.id);
     
@@ -143,8 +143,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ url, fileName: file.name, size: file.size, mimeType });
-  } catch (uploadError) {
-    console.error("[Upload] Error uploading file:", uploadError);
-    return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

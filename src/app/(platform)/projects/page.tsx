@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
   Search,
@@ -13,6 +14,8 @@ import {
   XCircle,
   Inbox,
   Loader2,
+  FolderOpen,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,9 +169,19 @@ export default function ProjectsPage() {
   const totalPending = myProjects.reduce((s, p) => s + p.pendingRequests.length, 0);
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+      >
         <div>
           <h1 className="font-heading text-2xl md:text-3xl font-bold">
             Projects
@@ -184,7 +197,7 @@ export default function ProjectsPage() {
             <Plus className="mr-2 h-4 w-4" />
             Post Project Idea
         </Button>
-      </div>
+      </motion.div>
 
       {/* Tabs */}
       <div className="mobile-tabs">
@@ -242,25 +255,51 @@ export default function ProjectsPage() {
           {loading ? (
             <div className="mobile-card-grid">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-64 bg-muted animate-pulse rounded-lg" />
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0.5, 0.8, 0.5] }}
+                  transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.1 }}
+                  className="h-64 bg-muted rounded-lg"
+                />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <Card>
-              <CardContent className="mobile-empty-card">
-                <p className="text-muted-foreground">No projects found.</p>
-                <Button className="mt-4 mobile-primary-action" render={<Link href="/projects/create" />}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Post the first one!
-                </Button>
-              </CardContent>
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card>
+                <CardContent className="mobile-empty-card">
+                  <motion.div
+                    animate={{ rotate: [0, 10, -10, 0] }}
+                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                  >
+                    <FolderOpen className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
+                  </motion.div>
+                  <p className="text-muted-foreground">No projects found.</p>
+                  <Button className="mt-4 mobile-primary-action" render={<Link href="/projects/create" />}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Post the first one!
+                  </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
           ) : (
           <div className="mobile-card-grid">
-            {filtered.map((project) => (
-              <Card
+            <AnimatePresence mode="popLayout">
+            {filtered.map((project, idx) => (
+              <motion.div
                 key={project.id}
-                className="group hover:shadow-lg hover:border-primary/30 transition-all"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.3, delay: idx * 0.05 }}
+                whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              >
+              <Card
+                className="group hover:shadow-lg hover:border-primary/30 transition-all h-full"
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
@@ -335,7 +374,9 @@ export default function ProjectsPage() {
                   </div>
                 </CardFooter>
               </Card>
+              </motion.div>
             ))}
+            </AnimatePresence>
           </div>
           )}
         </>
@@ -344,28 +385,66 @@ export default function ProjectsPage() {
         myLoading ? (
           <div className="grid gap-4 md:grid-cols-2">
             {[1, 2].map((i) => (
-              <div key={i} className="h-64 bg-muted animate-pulse rounded-lg" />
+              <motion.div
+                key={i}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0.5, 0.8, 0.5] }}
+                transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.1 }}
+                className="h-64 bg-muted rounded-lg"
+              />
             ))}
           </div>
         ) : myProjects.length === 0 ? (
-          <Card>
-            <CardContent className="mobile-empty-card">
-              <p className="text-muted-foreground">You haven&apos;t created any projects yet.</p>
-              <Button className="mt-4 mobile-primary-action" render={<Link href="/projects/create" />}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create your first project
-              </Button>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Card>
+              <CardContent className="mobile-empty-card">
+                <motion.div
+                  animate={{
+                    scale: [1, 1.1, 1],
+                    rotate: [0, 5, -5, 0],
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <Sparkles className="h-16 w-16 text-primary/50 mx-auto mb-4" />
+                </motion.div>
+                <p className="text-muted-foreground">You haven&apos;t created any projects yet.</p>
+                <Button className="mt-4 mobile-primary-action" render={<Link href="/projects/create" />}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create your first project
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
         ) : (
-          <div className="space-y-6">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="space-y-6"
+          >
             {actionError && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              >
                 {actionError}
-              </div>
+              </motion.div>
             )}
-            {myProjects.map((project) => (
-              <Card key={project.id} className="overflow-hidden">
+            <AnimatePresence mode="popLayout">
+            {myProjects.map((project, idx) => (
+              <motion.div
+                key={project.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3, delay: idx * 0.05 }}
+              >
+              <Card className="overflow-hidden">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap items-center gap-3">
@@ -448,10 +527,12 @@ export default function ProjectsPage() {
                   </CardContent>
                 )}
               </Card>
+              </motion.div>
             ))}
-          </div>
+            </AnimatePresence>
+          </motion.div>
         )
       )}
-    </div>
+    </motion.div>
   );
 }

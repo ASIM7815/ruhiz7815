@@ -84,19 +84,38 @@ export function CallInterface({
     window.setTimeout(() => setRemoteAudioBlocked(blocked), 0);
   }, []);
 
+  // Attach local stream and ensure video plays
   useEffect(() => {
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream;
+    const videoElement = localVideoRef.current;
+    if (!videoElement) return;
+
+    videoElement.srcObject = localStream;
+
+    if (localStream && hasLiveTrack(localStream, "video")) {
+      // Explicitly play the video
+      videoElement.play().catch(() => {
+        // Autoplay might fail on some browsers, but muted local video should work
+      });
     }
   }, [localStream]);
 
+  // Attach remote stream and ensure video plays
   useEffect(() => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current.muted = true;
-      void remoteVideoRef.current.play().catch(() => {
-        // Muted remote video should autoplay; the audio element handles sound.
-      });
+    const videoElement = remoteVideoRef.current;
+    if (!videoElement) return;
+
+    videoElement.srcObject = remoteStream;
+    videoElement.muted = true;
+
+    if (remoteStream && hasLiveTrack(remoteStream, "video")) {
+      // Explicitly play the video with retry
+      const attemptPlay = () => {
+        videoElement.play().catch(() => {
+          // Retry once after a brief delay
+          setTimeout(() => videoElement.play().catch(() => {}), 100);
+        });
+      };
+      attemptPlay();
     }
   }, [remoteStream]);
 
@@ -258,15 +277,16 @@ export function CallInterface({
       </div>
 
       <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-zinc-950">
-        {showRemoteVideo ? (
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="h-full w-full object-contain"
-          />
-        ) : (
+        {/* Always mount remote video element, hide with CSS */}
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className="h-full w-full object-contain"
+          style={{ display: showRemoteVideo ? "block" : "none" }}
+        />
+        {!showRemoteVideo && (
           <div className="flex flex-col items-center text-center text-white">
             <Avatar className="h-28 w-28 border border-white/20">
               <AvatarImage src={activeCall.peer.image ?? undefined} />
@@ -280,15 +300,19 @@ export function CallInterface({
         )}
 
         <div className="absolute bottom-4 right-4 h-36 w-28 overflow-hidden rounded-lg border border-white/20 bg-zinc-900 shadow-xl sm:h-44 sm:w-36">
-          {showLocalVideo ? (
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="h-full w-full object-cover"
-            />
-          ) : (
+          {/* Always mount video element, hide with CSS to prevent ref issues */}
+          <video
+            ref={localVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className="h-full w-full object-cover"
+            style={{
+              display: showLocalVideo ? "block" : "none",
+              transform: showLocalVideo ? "scaleX(-1)" : undefined, // Mirror local video
+            }}
+          />
+          {!showLocalVideo && (
             <div className="flex h-full w-full items-center justify-center text-white/70">
               {activeCall.kind === "video" ? (
                 <VideoOff className="h-7 w-7" />

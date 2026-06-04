@@ -81,9 +81,12 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
           },
         },
       },
-      achievements: {
-        orderBy: { createdAt: "desc" },
+      userAchievements: {
+        orderBy: { unlockedAt: "desc" },
         take: 8,
+        include: {
+          achievement: true,
+        },
       },
       activities: {
         orderBy: { createdAt: "desc" },
@@ -166,7 +169,7 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
       type: activity.type,
       title: activity.title,
       message: activity.message,
-      href: activity.href,
+      href: null,
       createdAt: activity.createdAt,
     })),
   ]
@@ -231,12 +234,12 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
       memberCount: membership.group._count.members,
       joinedAt: membership.joinedAt,
     })),
-    achievements: user.achievements.map((achievement) => ({
-      id: achievement.id,
-      title: achievement.title,
-      description: achievement.description,
-      icon: achievement.icon,
-      type: achievement.type,
+    achievements: user.userAchievements.map((ua: any) => ({
+      id: ua.id,
+      title: ua.achievement.name,
+      description: ua.achievement.description,
+      icon: ua.achievement.icon,
+      type: ua.achievement.category,
     })),
     endorsements: endorsementCounts,
     activity: derivedActivity,

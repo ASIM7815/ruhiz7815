@@ -75,7 +75,7 @@ export async function POST(
     await db.notification.createMany({
       data: leaderIds.map((leaderId) => ({
         userId: leaderId,
-        type: "STUDY_GROUP_JOIN_REQUEST",
+        type: "GROUP_INVITATION",
         title: "New study group join request",
         message: `${user.name} wants to join your study group "${group.name}".`,
       })),

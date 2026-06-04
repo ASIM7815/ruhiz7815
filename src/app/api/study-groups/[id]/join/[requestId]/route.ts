@@ -68,7 +68,7 @@ export async function PATCH(
       await db.notification.create({
         data: {
           userId: joinReq.userId,
-          type: "STUDY_GROUP_JOIN_REJECTED",
+          type: "GENERAL",
           title: "Study group request declined",
           message: `Your request to join "${group.name}" was declined.`,
         },
@@ -101,9 +101,9 @@ export async function PATCH(
     await db.notification.create({
       data: {
         userId: joinReq.userId,
-        type: "STUDY_GROUP_JOIN_ACCEPTED",
+        type: "GROUP_INVITATION",
         title: "Study group request approved",
-        message: `You\'ve been accepted into "${group.name}". The group chat is now available in Messages.`,
+        message: `You've been accepted into "${group.name}". The group chat is now available in Messages.`,
       },
     });
   }

@@ -1121,15 +1121,60 @@ export function useWebRTCCall({
     setMicEnabled(next);
   }, [micEnabled]);
 
-  const toggleCamera = useCallback(() => {
+  const toggleCamera = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    const stream = localStreamRef.current;
+    
+    if (!stream) return;
+
     const next = !cameraEnabled;
-    localStreamRef.current
-      ?.getVideoTracks()
-      .forEach((track) => {
+    const videoTracks = stream.getVideoTracks();
+
+    if (next && videoTracks.length === 0) {
+      // Camera was fully stopped, need to get new video track
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            height: { ideal: 720 },
+            width: { ideal: 1280 },
+          },
+        });
+
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        if (!newVideoTrack) return;
+
+        // Add track to stream
+        stream.addTrack(newVideoTrack);
+        setLocalStream(new MediaStream([...stream.getTracks()]));
+
+        // Replace track in peer connection if connected
+        if (pc) {
+          const videoSender = pc
+            .getSenders()
+            .find((sender) => sender.track?.kind === "video");
+
+          if (videoSender) {
+            await videoSender.replaceTrack(newVideoTrack);
+          } else {
+            pc.addTrack(newVideoTrack, stream);
+          }
+        }
+
+        newVideoTrack.onended = () => setCameraEnabled(false);
+        setCameraEnabled(true);
+      } catch {
+        // Camera access failed, stay disabled
+        return;
+      }
+    } else {
+      // Just toggle enable/disable on existing tracks
+      videoTracks.forEach((track) => {
         track.enabled = next;
       });
-    setCameraEnabled(next);
-  }, [cameraEnabled]);
+      setCameraEnabled(next);
+    }
+  }, [cameraEnabled, setLocalStream]);
 
   const renegotiate = useCallback(async () => {
     const current = activeCallRef.current;

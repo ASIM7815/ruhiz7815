@@ -176,7 +176,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
               { label: "Projects", value: profile.stats.projects },
               { label: "Resources", value: profile.stats.resources },
               { label: "Groups", value: profile.stats.studyGroups },
-            ].map((stat) => (
+            ].map((stat: any) => (
               <div key={stat.label} className="rounded-lg border bg-background px-3 py-2">
                 <p className="font-heading text-xl font-semibold">{stat.value}</p>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
@@ -202,7 +202,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
         >
           {profile.projects.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {profile.projects.map((project) => (
+              {profile.projects.map((project: any) => (
                 <Link
                   key={project.id}
                   href={`/projects/${project.id}`}
@@ -215,7 +215,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
                   <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{project.description}</p>
                   {project.skills.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1">
-                      {project.skills.slice(0, 4).map((skill) => (
+                      {project.skills.slice(0, 4).map((skill: any) => (
                         <Badge key={skill} variant="secondary">
                           {skill}
                         </Badge>
@@ -233,7 +233,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
         <Section title="Resources" icon={BookOpen}>
           {profile.resources.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {profile.resources.map((resource) => (
+              {profile.resources.map((resource: any) => (
                 <div key={resource.id} className="rounded-lg border p-3">
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="line-clamp-1 font-medium">{resource.title}</h3>
@@ -257,7 +257,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
         <Section title="Activity" icon={Activity}>
           {profile.activity.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {profile.activity.map((item) => {
+              {profile.activity.map((item: any) => {
                 const content = (
                   <div className="rounded-lg border p-3">
                     <div className="flex items-start justify-between gap-3">
@@ -308,7 +308,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
                   />
                 </div>
                 <div className="mt-4 space-y-2">
-                  {profile.completion.items.map((item) => (
+                  {profile.completion.items.map((item: any) => (
                     <div key={item.label} className="flex items-center gap-2 text-xs">
                       <span className={item.done ? "text-primary" : "text-muted-foreground"}>
                         <Check className="h-3.5 w-3.5" />
@@ -331,7 +331,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
             <CardContent>
               {profile.skills.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {profile.skills.map((skill) => (
+                  {profile.skills.map((skill: any) => (
                     <Badge key={skill} variant="secondary" className="text-xs">
                       {skill}
                     </Badge>
@@ -353,7 +353,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
             <CardContent>
               {profile.interests.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {profile.interests.map((interest) => (
+                  {profile.interests.map((interest: any) => (
                     <Badge key={interest} variant="outline" className="text-xs">
                       {interest}
                     </Badge>
@@ -375,7 +375,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
             <CardContent>
               {profile.studyGroups.length > 0 ? (
                 <div className="space-y-2">
-                  {profile.studyGroups.slice(0, 2).map((group) => (
+                  {profile.studyGroups.slice(0, 2).map((group: any) => (
                     <div key={group.id} className="rounded-lg border p-2">
                       <p className="text-sm font-medium line-clamp-1">{group.name}</p>
                       <p className="text-xs text-muted-foreground">{group.subject}</p>
@@ -401,7 +401,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
             <CardContent>
               {profile.achievements.length > 0 ? (
                 <div className="space-y-2">
-                  {profile.achievements.slice(0, 2).map((achievement) => (
+                  {profile.achievements.slice(0, 2).map((achievement: any) => (
                     <div key={achievement.id} className="rounded-lg border p-2">
                       <p className="text-sm font-medium line-clamp-1">
                         {achievement.icon ? `${achievement.icon} ` : ""}
@@ -429,7 +429,7 @@ export function StudentProfileView({ profile, viewerId, publicShell = false }: S
             <CardContent>
               {profile.endorsements.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {profile.endorsements.slice(0, 4).map((endorsement) => (
+                  {profile.endorsements.slice(0, 4).map((endorsement: any) => (
                     <Badge key={endorsement.label} variant="secondary" className="text-xs">
                       {endorsement.label} ({endorsement.count})
                     </Badge>

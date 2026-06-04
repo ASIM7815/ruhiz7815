@@ -69,7 +69,7 @@ export async function POST(
     await db.notification.create({
       data: {
         userId,
-        type: "NEW_FOLLOWER",
+        type: "GENERAL",
         title: "New follower",
         message: `${user.name} started following you.`,
       },

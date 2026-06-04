@@ -5,6 +5,7 @@ import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase-client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { motion, AnimatePresence } from "framer-motion";
 import NextImage from "next/image";
 import {
   Search,
@@ -23,6 +24,9 @@ import {
   Users,
   Phone,
   Video,
+  MoreVertical,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,6 +38,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -199,11 +209,17 @@ function MessagesPageContent() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [peerTyping, setPeerTyping] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const convPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
 
   // ── Fetch conversations ────────────────────────────────────────
 
@@ -285,7 +301,13 @@ function MessagesPageContent() {
       }
 
       const channel = supabase
-        .channel(`chat-${conversationId}`)
+        .channel(`chat-${conversationId}`, {
+          config: {
+            presence: {
+              key: userId || "anonymous",
+            },
+          },
+        })
         .on(
           "postgres_changes",
           {
@@ -339,19 +361,68 @@ function MessagesPageContent() {
           (payload) => {
             const row = payload.new as {
               id: string;
+              content: string;
               is_read: boolean;
               sender_id: string;
             };
 
-            // Update read status (for WhatsApp-style double ticks)
+            // Update message content (for edits) and read status
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === row.id ? { ...m, isRead: row.is_read } : m
+                m.id === row.id
+                  ? { ...m, content: row.content, isRead: row.is_read }
+                  : m
               )
             );
           }
         )
-        .subscribe();
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "direct_messages",
+            filter: `conversation_id=eq.${conversationId}`,
+          },
+          (payload) => {
+            const row = payload.old as { id: string };
+            setMessages((prev) => prev.filter((m) => m.id !== row.id));
+          }
+        )
+        .on("presence", { event: "sync" }, () => {
+          const state = channel.presenceState();
+          const keys = Object.keys(state);
+          
+          // Check if peer is online (anyone except current user)
+          const peerOnline = keys.some((key) => key !== userId);
+          setIsOnline(peerOnline);
+
+          // Check if peer is typing
+          const peerState = keys.find((key) => key !== userId);
+          if (peerState && state[peerState]) {
+            const presence = state[peerState][0] as { typing?: boolean };
+            setPeerTyping(presence.typing ?? false);
+          } else {
+            setPeerTyping(false);
+          }
+        })
+        .on("presence", { event: "join" }, ({ key }) => {
+          if (key !== userId) {
+            setIsOnline(true);
+          }
+        })
+        .on("presence", { event: "leave" }, ({ key }) => {
+          if (key !== userId) {
+            setIsOnline(false);
+            setPeerTyping(false);
+          }
+        })
+        .subscribe(async (status) => {
+          if (status === "SUBSCRIBED" && userId) {
+            // Track this user as present
+            await channel.track({ online: true, typing: false });
+          }
+        });
 
       channelRef.current = channel;
     },
@@ -660,12 +731,123 @@ function MessagesPageContent() {
     [messages, userId]
   );
 
+  // ── Handle typing indicator ───────────────────────────────────
+
+  const handleTyping = useCallback(() => {
+    if (!channelRef.current || !userId) return;
+
+    // Set typing to true
+    if (!isTyping) {
+      setIsTyping(true);
+      void channelRef.current.track({ online: true, typing: true });
+    }
+
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set typing to false after 2 seconds of inactivity
+    typingTimeoutRef.current = window.setTimeout(() => {
+      setIsTyping(false);
+      if (channelRef.current) {
+        void channelRef.current.track({ online: true, typing: false });
+      }
+    }, 2000);
+  }, [isTyping, userId]);
+
+  // ── Edit message ───────────────────────────────────────────────
+
+  const startEditMessage = useCallback((msg: MessageData) => {
+    setEditingMessageId(msg.id);
+    setEditingContent(msg.content);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingContent("");
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (!editingMessageId || !editingContent.trim()) return;
+
+    const originalContent = messages.find((m) => m.id === editingMessageId)?.content;
+
+    // Optimistic update
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === editingMessageId ? { ...m, content: editingContent.trim() } : m
+      )
+    );
+
+    setEditingMessageId(null);
+    setEditingContent("");
+
+    try {
+      const res = await fetch(`/api/messages/${editingMessageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editingContent.trim() }),
+      });
+
+      if (!res.ok) {
+        // Revert on error
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === editingMessageId ? { ...m, content: originalContent || "" } : m
+          )
+        );
+        toast.error("Failed to edit message");
+      }
+    } catch {
+      // Revert on error
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === editingMessageId ? { ...m, content: originalContent || "" } : m
+        )
+      );
+      toast.error("Failed to edit message");
+    }
+  }, [editingMessageId, editingContent, messages]);
+
+  // ── Delete message ─────────────────────────────────────────────
+
+  const deleteMessage = useCallback(async (messageId: string) => {
+    const originalMessages = messages;
+
+    // Optimistic delete
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+
+    try {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        // Revert on error
+        setMessages(originalMessages);
+        toast.error("Failed to delete message");
+      }
+    } catch {
+      // Revert on error
+      setMessages(originalMessages);
+      toast.error("Failed to delete message");
+    }
+  }, [messages]);
+
   // ── Handle key press ───────────────────────────────────────────
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      if (editingMessageId) {
+        saveEdit();
+      } else {
+        sendMessage();
+      }
+    }
+    if (e.key === "Escape" && editingMessageId) {
+      cancelEdit();
     }
   };
 
@@ -681,7 +863,12 @@ function MessagesPageContent() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        >
+          <Loader2 className="h-8 w-8 text-muted-foreground" />
+        </motion.div>
       </div>
     );
   }
@@ -843,9 +1030,14 @@ function MessagesPageContent() {
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {conversations.map((conv) => (
-                  <button
+                <AnimatePresence mode="popLayout">
+                {conversations.map((conv, idx) => (
+                  <motion.button
                     key={conv.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2, delay: idx * 0.03 }}
                     onClick={() => selectConversation(conv)}
                     className={`w-full flex min-h-[4.5rem] items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left ${
                       selectedConversation === conv.id ? "bg-accent" : ""
@@ -890,8 +1082,9 @@ function MessagesPageContent() {
                         )}
                       </div>
                     </div>
-                  </button>
+                  </motion.button>
                 ))}
+                </AnimatePresence>
               </div>
             )}
             </>
@@ -1000,7 +1193,16 @@ function MessagesPageContent() {
                     {selectedParticipant.name}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    UID: {selectedParticipant.uid}
+                    {peerTyping ? (
+                      <span className="text-primary">typing...</span>
+                    ) : isOnline ? (
+                      <span className="flex items-center gap-1">
+                        <span className="h-2 w-2 rounded-full bg-green-500" />
+                        Online
+                      </span>
+                    ) : (
+                      `UID: ${selectedParticipant.uid}`
+                    )}
                   </p>
                 </div>
                 <div className="ml-auto flex items-center gap-1">
@@ -1052,6 +1254,7 @@ function MessagesPageContent() {
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4">
                 <div className="space-y-3">
+                <AnimatePresence mode="sync">
                   {messages.map((msg, idx) => {
                     const isOwn = msg.senderId === userId;
                     const attachment = parseAttachment(msg.content);
@@ -1061,8 +1264,12 @@ function MessagesPageContent() {
                         messages[idx - 1].senderId !== msg.senderId);
 
                     return (
-                      <div
+                      <motion.div
                         key={msg.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ duration: 0.2 }}
                         className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                       >
                         <div
@@ -1199,8 +1406,32 @@ function MessagesPageContent() {
                             <div
                               className={`absolute top-0 ${
                                 isOwn ? "right-full mr-1" : "left-full ml-1"
-                              } hidden group-hover:flex items-center`}
+                              } hidden group-hover:flex items-center gap-1`}
                             >
+                              {/* Edit/Delete menu for own messages */}
+                              {isOwn && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger className="p-1 rounded-full hover:bg-accent text-muted-foreground">
+                                    <MoreVertical className="h-3.5 w-3.5" />
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => startEditMessage(msg)}
+                                      className="gap-2"
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => deleteMessage(msg.id)}
+                                      className="gap-2 text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                               <Popover>
                                 <PopoverTrigger className="p-1 rounded-full hover:bg-accent text-muted-foreground">
                                   <Smile className="h-3.5 w-3.5" />
@@ -1227,9 +1458,10 @@ function MessagesPageContent() {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
+                </AnimatePresence>
                   <div ref={messagesEndRef} />
                 </div>
               </div>
@@ -1292,8 +1524,15 @@ function MessagesPageContent() {
                   </Popover>
                   <Input
                     placeholder="Type a message..."
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
+                    value={editingMessageId ? editingContent : messageInput}
+                    onChange={(e) => {
+                      if (editingMessageId) {
+                        setEditingContent(e.target.value);
+                      } else {
+                        setMessageInput(e.target.value);
+                        handleTyping();
+                      }
+                    }}
                     onKeyDown={handleKeyDown}
                     className="h-12 min-w-0 flex-1 rounded-xl px-3 text-base sm:h-8 sm:text-sm"
                     maxLength={5000}
@@ -1304,15 +1543,31 @@ function MessagesPageContent() {
                         <Button
                           size="icon"
                           className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
-                          onClick={sendMessage}
-                          disabled={!messageInput.trim() || uploadingAttachment}
+                          onClick={editingMessageId ? saveEdit : sendMessage}
+                          disabled={
+                            editingMessageId
+                              ? !editingContent.trim()
+                              : !messageInput.trim() || uploadingAttachment
+                          }
                         >
                           <Send className="h-4 w-4" />
                         </Button>
                       }
                     />
-                    <TooltipContent>Send message</TooltipContent>
+                    <TooltipContent>
+                      {editingMessageId ? "Save edit" : "Send message"}
+                    </TooltipContent>
                   </Tooltip>
+                  {editingMessageId && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
+                      onClick={cancelEdit}
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </>

@@ -2,6 +2,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCurrentUser } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
+import {
+  validateString,
+  validateNumber,
+} from "@/lib/validation";
+import {
+  handleApiError,
+  successResponse,
+  ValidationError,
+  logApiRequest,
+} from "@/lib/api-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -128,29 +138,65 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { user, error } = await requireAuth();
-  if (error || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const { user, error } = await requireAuth();
+    if (error || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const body = await req.json().catch(() => ({}));
-  const { name, subject, description, maxMembers } = body;
+    logApiRequest("POST", "/api/study-groups", user.id);
 
-  if (!name?.trim() || !subject?.trim()) {
-    return NextResponse.json({ error: "Name and subject are required" }, { status: 400 });
-  }
+    const body = await req.json().catch(() => null);
+    if (!body) {
+      throw new ValidationError("Invalid request body");
+    }
 
-  const group = await db.studyGroup.create({
-    data: {
-      name: name.trim(),
-      subject: subject.trim(),
-      description: description?.trim() || null,
-      maxMembers: Math.min(Math.max(parseInt(maxMembers) || 10, 2), 100),
-      members: {
-        create: { userId: user.id, role: "LEADER" },
+    // Validate name
+    const { value: name, error: nameError } = validateString(
+      body.name,
+      "Name",
+      { required: true, minLength: 3, maxLength: 100 }
+    );
+    if (nameError) return nameError;
+
+    // Validate subject
+    const { value: subject, error: subjectError } = validateString(
+      body.subject,
+      "Subject",
+      { required: true, minLength: 2, maxLength: 100 }
+    );
+    if (subjectError) return subjectError;
+
+    // Validate description (optional)
+    const { value: description, error: descError } = validateString(
+      body.description,
+      "Description",
+      { required: false, maxLength: 500 }
+    );
+    if (descError) return descError;
+
+    // Validate maxMembers
+    const { value: maxMembers, error: maxError } = validateNumber(
+      body.maxMembers,
+      "Max members",
+      { required: false, min: 2, max: 100, integer: true }
+    );
+    if (maxError) return maxError;
+
+    const group = await db.studyGroup.create({
+      data: {
+        name: name!,
+        subject: subject!,
+        description,
+        maxMembers: maxMembers || 10,
+        members: {
+          create: { userId: user.id, role: "LEADER" },
+        },
       },
-    },
-  });
+    });
 
-  return NextResponse.json({ id: group.id }, { status: 201 });
+    return successResponse({ id: group.id }, 201);
+  } catch (error) {
+    return handleApiError(error);
+  }
 }

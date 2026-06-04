@@ -78,7 +78,7 @@ export async function PATCH(
     await db.notification.create({
       data: {
         userId: joinRequest.userId,
-        type: "PROJECT_JOIN_REJECTED",
+        type: "PROJECT_REJECTED",
         title: "Project request declined",
         message: `Your request to join ${project.title} was declined.`,
       },
@@ -106,7 +106,7 @@ export async function PATCH(
     await tx.notification.create({
       data: {
         userId: joinRequest.userId,
-        type: "PROJECT_JOIN_ACCEPTED",
+        type: "PROJECT_ACCEPTED",
         title: "Project request approved",
         message: `You joined ${project.title}. A group chat is ready in Messages.`,
       },

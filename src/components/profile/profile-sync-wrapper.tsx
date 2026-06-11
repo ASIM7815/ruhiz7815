@@ -13,10 +13,14 @@ interface ProfileSyncWrapperProps {
 
 // Calculate completion items based on profile data
 function calculateCompletion(profile: StudentProfile) {
+  const skillsLength = Array.isArray(profile.skills) 
+    ? (typeof profile.skills[0] === 'string' ? profile.skills.length : profile.skills.length)
+    : 0;
+    
   const items = [
     { label: "Photo", done: Boolean(profile.image) },
     { label: "Bio", done: Boolean(profile.bio?.trim()) },
-    { label: "Skills", done: profile.skills.length > 0 },
+    { label: "Skills", done: skillsLength > 0 },
     { label: "Interests", done: profile.interests.length > 0 },
     { label: "Projects", done: profile.stats.projects > 0 },
   ];
@@ -43,10 +47,7 @@ export function ProfileSyncWrapper({
         const updated = {
           ...current,
           ...profileUpdates.updates,
-          // Preserve skills and interests if they're updated
-          skills: profileUpdates.updates.skills || current.skills,
-          interests: profileUpdates.updates.interests || current.interests,
-        };
+        } as StudentProfile;
         
         // Recalculate completion score
         const completion = calculateCompletion(updated);

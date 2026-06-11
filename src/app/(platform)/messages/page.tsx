@@ -1402,16 +1402,16 @@ function MessagesPageContent() {
                               </div>
                             )}
 
-                            {/* Quick emoji reaction picker */}
+                            {/* Quick emoji reaction picker - Always visible */}
                             <div
                               className={`absolute top-0 ${
                                 isOwn ? "right-full mr-1" : "left-full ml-1"
-                              } hidden group-hover:flex items-center gap-1`}
+                              } flex items-center gap-1`}
                             >
                               {/* Edit/Delete menu for own messages */}
                               {isOwn && (
                                 <DropdownMenu>
-                                  <DropdownMenuTrigger className="p-1 rounded-full hover:bg-accent text-muted-foreground">
+                                  <DropdownMenuTrigger className="p-1 rounded-full hover:bg-accent text-muted-foreground bg-background/80 backdrop-blur-sm shadow-sm">
                                     <MoreVertical className="h-3.5 w-3.5" />
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
@@ -1433,7 +1433,7 @@ function MessagesPageContent() {
                                 </DropdownMenu>
                               )}
                               <Popover>
-                                <PopoverTrigger className="p-1 rounded-full hover:bg-accent text-muted-foreground">
+                                <PopoverTrigger className="p-1 rounded-full hover:bg-accent text-muted-foreground bg-background/80 backdrop-blur-sm shadow-sm">
                                   <Smile className="h-3.5 w-3.5" />
                                 </PopoverTrigger>
                                 <PopoverContent

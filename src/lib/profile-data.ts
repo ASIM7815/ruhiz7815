@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { profileLookupToken, profilePathFor } from "@/lib/profile-identity";
+import { getActivityHeatmap } from "@/lib/activity/tracker";
+import { getLevelTitle } from "@/lib/reputation/calculator";
 
 export type ProfileCompletionItem = {
   label: string;
@@ -37,6 +39,8 @@ function completionItems(profile: {
   skills: { skill: string }[];
   interests: { interest: string }[];
   ownedProjects: unknown[];
+  githubUsername: string | null;
+  linkedinUrl: string | null;
 }) {
   return [
     { label: "Photo", done: Boolean(profile.image) },
@@ -44,6 +48,7 @@ function completionItems(profile: {
     { label: "Skills", done: profile.skills.length > 0 },
     { label: "Interests", done: profile.interests.length > 0 },
     { label: "Projects", done: profile.ownedProjects.length > 0 },
+    { label: "Social Links", done: Boolean(profile.githubUsername || profile.linkedinUrl) },
   ];
 }
 
@@ -96,6 +101,11 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
         select: { label: true },
         take: 200,
       },
+      featuredItems: {
+        where: { isPinned: true },
+        orderBy: { displayOrder: "asc" },
+        take: 4,
+      },
       _count: {
         select: {
           followers: true,
@@ -110,7 +120,7 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
 
   if (!user) return null;
 
-  const [downloadStats, follow] = await Promise.all([
+  const [downloadStats, follow, skillEndorsements, heatmapData] = await Promise.all([
     db.resource.aggregate({
       where: { authorId: user.id },
       _sum: { downloads: true },
@@ -126,6 +136,14 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
           select: { id: true },
         })
       : Promise.resolve(null),
+    // Get skill endorsement counts
+    db.skillEndorsement.groupBy({
+      by: ['skillName'],
+      where: { receiverId: user.id },
+      _count: { skillName: true },
+    }),
+    // Get activity heatmap
+    getActivityHeatmap(user.id),
   ]);
 
   const completion = completionItems(user);
@@ -174,7 +192,13 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
     })),
   ]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 8);
+    .slice(0, 10);
+
+  // Map skills with endorsement counts
+  const skillsWithEndorsements = user.skills.map((skill) => ({
+    skill: skill.skill,
+    endorsements: skillEndorsements.find(e => e.skillName === skill.skill)?._count.skillName || 0,
+  })).sort((a, b) => b.endorsements - a.endorsements);
 
   return {
     id: user.id,
@@ -189,11 +213,20 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
     university: user.university,
     role: user.role,
     reputation: user.reputation,
+    level: user.level,
+    currentStreak: user.currentStreak,
+    longestStreak: user.longestStreak,
+    verified: user.verified,
+    customBadges: user.customBadges,
+    githubUsername: user.githubUsername,
+    linkedinUrl: user.linkedinUrl,
+    twitterUsername: user.twitterUsername,
+    portfolioUrl: user.portfolioUrl,
     collegeVerified: user.collegeVerified,
     createdAt: user.createdAt,
     profilePath: profilePathFor(user),
     isFollowing: Boolean(follow),
-    skills: user.skills.map((skill) => skill.skill),
+    skills: skillsWithEndorsements,
     interests: user.interests.map((interest) => interest.interest),
     completion: {
       score: completionScore(completion),
@@ -240,9 +273,19 @@ export async function getStudentProfile(identifier: string, viewerId?: string | 
       description: ua.achievement.description,
       icon: ua.achievement.icon,
       type: ua.achievement.category,
+      unlockedAt: ua.unlockedAt,
     })),
     endorsements: endorsementCounts,
     activity: derivedActivity,
+    featuredItems: user.featuredItems.map((item) => ({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      description: item.description,
+      url: item.url,
+      icon: item.icon,
+    })),
+    heatmapData,
   };
 }
 

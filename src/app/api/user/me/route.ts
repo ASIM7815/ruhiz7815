@@ -50,6 +50,11 @@ export async function GET() {
     collegeVerified: user.collegeVerified,
     onboardingComplete: user.onboardingComplete,
     createdAt: user.createdAt.toISOString(),
+    githubUsername: user.githubUsername,
+    linkedinUrl: user.linkedinUrl,
+    twitterUsername: user.twitterUsername,
+    portfolioUrl: user.portfolioUrl,
+    customBadges: user.customBadges,
     skills: user.skills.map((s) => s.skill),
     interests: user.interests.map((i) => i.interest),
     stats: {
@@ -81,6 +86,11 @@ export async function PATCH(req: NextRequest) {
     interests,
     image,
     coverImage,
+    githubUsername,
+    linkedinUrl,
+    twitterUsername,
+    portfolioUrl,
+    customBadges,
   } = body;
 
   // Validate
@@ -126,6 +136,11 @@ export async function PATCH(req: NextRequest) {
   if (onboardingComplete !== undefined) data.onboardingComplete = onboardingComplete;
   if (image !== undefined) data.image = image;
   if (coverImage !== undefined) data.coverImage = coverImage;
+  if (githubUsername !== undefined) data.githubUsername = githubUsername?.trim() || null;
+  if (linkedinUrl !== undefined) data.linkedinUrl = linkedinUrl?.trim() || null;
+  if (twitterUsername !== undefined) data.twitterUsername = twitterUsername?.trim() || null;
+  if (portfolioUrl !== undefined) data.portfolioUrl = portfolioUrl?.trim() || null;
+  if (customBadges !== undefined) data.customBadges = customBadges;
 
   const user = await db.user.update({
     where: { id: authUser.id },
@@ -173,5 +188,10 @@ export async function PATCH(req: NextRequest) {
     university: user.university,
     role: user.role,
     onboardingComplete: user.onboardingComplete,
+    githubUsername: user.githubUsername,
+    linkedinUrl: user.linkedinUrl,
+    twitterUsername: user.twitterUsername,
+    portfolioUrl: user.portfolioUrl,
+    customBadges: user.customBadges,
   });
 }

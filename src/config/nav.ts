@@ -37,6 +37,6 @@ export const platformNav: NavItem[] = [
 export const platformSecondaryNav: NavItem[] = [
   { title: "Messages", href: "/messages", icon: MessageSquare },
   { title: "Notifications", href: "/notifications", icon: Bell },
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  // { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard }, // Hidden - redirects to profile
   { title: "Settings", href: "/settings", icon: Settings },
 ];

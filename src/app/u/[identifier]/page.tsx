@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { getStudentProfile } from "@/lib/profile-data";
-import { ProfileSyncWrapper } from "@/components/profile/profile-sync-wrapper";
+import { EnhancedProfileView } from "@/components/profile/enhanced-profile-view";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,5 +16,7 @@ export default async function SharedProfilePage({
 
   if (!profile) notFound();
 
-  return <ProfileSyncWrapper initialProfile={profile} viewerId={viewer?.id ?? null} publicShell />;
+  const isOwner = viewer?.id === profile.id;
+
+  return <EnhancedProfileView profile={profile as any} isOwner={isOwner} />;
 }

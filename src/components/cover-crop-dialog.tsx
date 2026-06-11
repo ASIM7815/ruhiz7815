@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, TouchEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, RotateCw } from "lucide-react";
+import { ZoomIn, RotateCw, Move } from "lucide-react";
 
 interface CoverCropDialogProps {
   open: boolean;
@@ -25,10 +25,54 @@ export function CoverCropDialog({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastTouch, setLastTouch] = useState<{ x: number; y: number } | null>(null);
+  const [lastPinchDistance, setLastPinchDistance] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
+  }, []);
+
+  // Touch gesture handlers for mobile
+  const getTouchDistance = (touch1: Touch, touch2: Touch) => {
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = useCallback((e: TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2) {
+      const distance = getTouchDistance(e.touches[0], e.touches[1]);
+      setLastPinchDistance(distance);
+    } else if (e.touches.length === 1) {
+      setIsDragging(true);
+      setLastTouch({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 2 && lastPinchDistance !== null) {
+      e.preventDefault();
+      const distance = getTouchDistance(e.touches[0], e.touches[1]);
+      const delta = distance - lastPinchDistance;
+      const zoomChange = delta * 0.005;
+      setZoom(prev => Math.max(0.01, Math.min(1, prev + zoomChange)));
+      setLastPinchDistance(distance);
+    } else if (e.touches.length === 1 && isDragging && lastTouch) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - lastTouch.x;
+      const dy = e.touches[0].clientY - lastTouch.y;
+      setPositionX(prev => Math.max(-200, Math.min(200, prev + dx)));
+      setPositionY(prev => Math.max(-100, Math.min(100, prev + dy)));
+      setLastTouch({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+    }
+  }, [isDragging, lastTouch, lastPinchDistance]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+    setLastTouch(null);
+    setLastPinchDistance(null);
   }, []);
 
   const handleCrop = useCallback(async () => {
@@ -102,7 +146,7 @@ export function CoverCropDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="relative bg-muted rounded-lg overflow-hidden" style={{ aspectRatio: '3/1' }}>
+          <div className="relative bg-muted rounded-lg overflow-hidden touch-none" style={{ aspectRatio: '3/1' }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
             <div className="absolute inset-0 flex items-center justify-center p-4">
               {imageSrc && (
                 <div
@@ -121,6 +165,10 @@ export function CoverCropDialog({
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute inset-0 bg-black/40" />
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-2 border-white shadow-lg w-[90%] h-[80%]" />
+            </div>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white px-3 py-1 rounded-full text-xs flex items-center gap-2">
+              <Move className="h-3 w-3" />
+              <span>Pinch to zoom • Drag to move</span>
             </div>
           </div>
 

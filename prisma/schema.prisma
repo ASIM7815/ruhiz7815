@@ -29,6 +29,24 @@ model User {
   achievementPoints  Int       @default(0) @map("achievement_points")
   collegeVerified    Boolean   @default(false) @map("college_verified")
   onboardingComplete Boolean   @default(false) @map("onboarding_complete")
+  
+  // NEW: Gamification fields
+  level              Int       @default(1)
+  currentStreak      Int       @default(0) @map("current_streak")
+  longestStreak      Int       @default(0) @map("longest_streak")
+  totalContributions Int       @default(0) @map("total_contributions")
+  lastActivityDate   DateTime? @map("last_activity_date")
+  
+  // NEW: Social links
+  githubUsername     String?   @map("github_username")
+  linkedinUrl        String?   @map("linkedin_url")
+  twitterUsername    String?   @map("twitter_username")
+  portfolioUrl       String?   @map("portfolio_url")
+  
+  // NEW: Verification & customization
+  verified           Boolean   @default(false)
+  customBadges       Json?     @map("custom_badges") // Array of {label, color, icon}
+  
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
@@ -55,6 +73,13 @@ model User {
   startupMembers     StartupMember[]
   startupJoinRequests StartupJoinRequest[]
   studyGroupJoinRequests StudyGroupJoinRequest[]
+  
+  // NEW: Relations
+  socialLinks      SocialLink[]
+  featuredItems    FeaturedItem[]
+  dailyActivities  DailyActivity[]
+  skillEndorsements SkillEndorsement[] @relation("SkillEndorsementReceiver")
+  givenEndorsements SkillEndorsement[] @relation("SkillEndorsementGiver")
 
   @@map("users")
 }
@@ -470,4 +495,81 @@ model StudyGroupJoinRequest {
 
   @@unique([groupId, userId])
   @@map("study_group_join_requests")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NEW MODELS FOR PROFILE REDESIGN (Phase 1)
+// ═══════════════════════════════════════════════════════════════
+
+// Social Links (GitHub, LinkedIn, Twitter, Portfolio, Custom)
+model SocialLink {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  platform     String   // github, linkedin, twitter, portfolio, custom
+  url          String
+  username     String?  // For display
+  verified     Boolean  @default(false)
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@index([userId, displayOrder])
+  @@map("social_links")
+}
+
+// Featured Items (Pinned content: Projects, Portfolio, GitHub, Resume)
+model FeaturedItem {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  type         String   // project, portfolio, github, resume, custom
+  title        String
+  description  String?
+  url          String?
+  thumbnail    String?  // Image URL
+  icon         String?  // Icon name/emoji
+  isPinned     Boolean  @default(true) @map("is_pinned")
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isPinned, displayOrder])
+  @@map("featured_items")
+}
+
+// Daily Activity Tracking (for heatmap)
+model DailyActivity {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  date          DateTime @db.Date
+  activityCount Int      @default(0) @map("activity_count")
+  activityTypes Json?    @map("activity_types") // {projects: 2, resources: 1, messages: 5}
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("daily_activities")
+}
+
+// Skill Endorsements (Enhanced endorsement system)
+model SkillEndorsement {
+  id         String   @id @default(cuid())
+  skillName  String   @map("skill_name")
+  receiverId String   @map("receiver_id")
+  giverId    String   @map("giver_id")
+  message    String?  // Optional endorsement message
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  receiver User @relation("SkillEndorsementReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  giver    User @relation("SkillEndorsementGiver", fields: [giverId], references: [id], onDelete: Cascade)
+
+  @@unique([skillName, receiverId, giverId])
+  @@index([receiverId, skillName])
+  @@index([giverId])
+  @@map("skill_endorsements")
 }

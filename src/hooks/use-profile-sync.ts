@@ -14,6 +14,11 @@ export interface ProfileUpdateEvent {
     university?: string | null;
     skills?: string[];
     interests?: string[];
+    githubUsername?: string | null;
+    linkedinUrl?: string | null;
+    twitterUsername?: string | null;
+    portfolioUrl?: string | null;
+    customBadges?: any;
   };
 }
 

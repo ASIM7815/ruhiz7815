@@ -979,6 +979,7 @@ export default function SettingsPage() {
                       <Select
                         value={badge.color}
                         onValueChange={(v) => {
+                          if (!v) return;
                           const updated = [...badges];
                           updated[index] = { ...updated[index], color: v };
                           setBadges(updated);

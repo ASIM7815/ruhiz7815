@@ -9,6 +9,7 @@ interface Toast {
   title: string;
   description?: string;
   variant?: "default" | "destructive";
+  className?: string;
 }
 
 const toasts: Toast[] = [];
@@ -54,6 +55,7 @@ export function Toaster() {
           key={toast.id}
           className={cn(
             "flex items-start gap-3 p-4 rounded-lg shadow-lg border animate-in slide-in-from-top-5",
+            toast.className,
             toast.variant === "destructive"
               ? "bg-destructive text-destructive-foreground border-destructive"
               : "bg-background border-border"

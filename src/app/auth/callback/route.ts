@@ -212,9 +212,9 @@ export async function GET(request: Request) {
       // Continue to redirect even if DB sync fails
     }
 
-    // Always redirect to dashboard after successful authentication
-    console.log("[auth/callback] ✅ Redirecting to dashboard");
-    return NextResponse.redirect(`${origin}/dashboard`);
+    // Redirect to a client-side page that will handle the redirect
+    console.log("[auth/callback] ✅ Redirecting to auth-complete");
+    return NextResponse.redirect(`${origin}/auth-complete`);
     
   } catch (err) {
     console.error("[auth/callback] ❌ Unexpected error:", err);

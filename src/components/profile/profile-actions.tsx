@@ -70,7 +70,9 @@ export function ProfileActions({
 
   async function toggleFollow() {
     if (!canInteract) {
-      router.push("/login");
+      // Save current URL to redirect back after login
+      const currentUrl = window.location.pathname;
+      router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
       return;
     }
 
@@ -93,7 +95,9 @@ export function ProfileActions({
 
   async function startMessage() {
     if (!canInteract) {
-      router.push("/login");
+      // Save current URL to redirect back after login
+      const currentUrl = window.location.pathname;
+      router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
       return;
     }
 

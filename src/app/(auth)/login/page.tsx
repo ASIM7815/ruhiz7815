@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-auth-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,9 +15,18 @@ import {
 } from "@/components/ui/card";
 import Image from "next/image";
 
-export default function LoginPage() {
+function LoginForm() {
   const [googleLoading, setGoogleLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect");
   const supabase = createClient();
+
+  useEffect(() => {
+    // Store redirect URL in sessionStorage for after auth
+    if (redirectTo) {
+      sessionStorage.setItem("auth_redirect", redirectTo);
+    }
+  }, [redirectTo]);
 
   const handleGoogleLogin = async () => {
     try {
@@ -67,7 +77,9 @@ export default function LoginPage() {
       <Card className="border-0 shadow-xl bg-card/80 backdrop-blur-sm">
         <CardHeader className="text-center pb-2">
           <CardTitle className="font-heading text-2xl">Welcome back</CardTitle>
-          <CardDescription>Log in to your account to continue collaborating</CardDescription>
+          <CardDescription>
+            {redirectTo ? "Log in to continue" : "Log in to your account to continue collaborating"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="px-8 pb-2 space-y-3">
           <Button
@@ -89,10 +101,27 @@ export default function LoginPage() {
         <CardFooter className="justify-center pb-6">
           <p className="text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-primary font-medium hover:underline">Sign up</Link>
+            <Link 
+              href={redirectTo ? `/register?redirect=${encodeURIComponent(redirectTo)}` : "/register"} 
+              className="text-primary font-medium hover:underline"
+            >
+              Sign up
+            </Link>
           </p>
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

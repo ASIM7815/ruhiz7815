@@ -135,7 +135,19 @@ export function EnhancedProfileView({ profile, isOwner }: { profile: ProfileData
                 </div>
 
                 <div className="flex items-center gap-2 text-muted-foreground mb-3">
-                  <span>@{profile.username}</span>
+                  <button
+                    onClick={() => {
+                      const shareUrl = profile.username 
+                        ? `${window.location.origin}/@${profile.username}`
+                        : window.location.href;
+                      navigator.clipboard.writeText(shareUrl);
+                      alert("Profile link copied!");
+                    }}
+                    className="hover:text-purple-400 transition-colors flex items-center gap-1"
+                    title="Copy profile link"
+                  >
+                    <span>@{profile.username}</span>
+                  </button>
                   {profile.uid && (
                     <>
                       <span>•</span>
@@ -243,7 +255,9 @@ export function EnhancedProfileView({ profile, isOwner }: { profile: ProfileData
                     </Link>
                     <button
                       onClick={() => {
-                        const url = window.location.href;
+                        const url = profile.username 
+                          ? `${window.location.origin}/@${profile.username}`
+                          : window.location.href;
                         if (navigator.share) {
                           navigator.share({ title: profile.name, url });
                         } else {
@@ -252,6 +266,7 @@ export function EnhancedProfileView({ profile, isOwner }: { profile: ProfileData
                         }
                       }}
                       className="px-4 py-2 bg-card border border-border rounded-lg hover:border-purple-500"
+                      title="Share profile"
                     >
                       <Share2 className="w-4 h-4" />
                     </button>

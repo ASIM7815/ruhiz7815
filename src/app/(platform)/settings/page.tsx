@@ -280,10 +280,15 @@ export default function SettingsPage() {
             broadcastProfileUpdate(profile.id, { image: url });
           }
           
+          // Auto-close dialog
+          setCropDialogOpen(false);
+          setSelectedImage(null);
+          
           toast({
-            title: "✨ Success!",
+            title: "✨ Image Uploaded!",
             description: "Profile photo updated successfully.",
             className: "bg-green-500/10 border-green-500/50 text-green-500",
+            duration: 3000,
           });
           // Refresh the router to update all pages with new image
           router.refresh();
@@ -376,10 +381,15 @@ export default function SettingsPage() {
         broadcastProfileUpdate(profile.id, { coverImage: url });
       }
       
+      // Auto-close dialog
+      setCoverCropDialogOpen(false);
+      setSelectedCoverImage(null);
+      
       toast({
-        title: "✨ Success!",
+        title: "✨ Image Uploaded!",
         description: "Cover image updated successfully.",
         className: "bg-green-500/10 border-green-500/50 text-green-500",
+        duration: 3000,
       });
       // Refresh the router to update all pages with new cover image
       router.refresh();

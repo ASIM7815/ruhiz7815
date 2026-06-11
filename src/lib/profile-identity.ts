@@ -47,7 +47,12 @@ export function profileLookupToken(value: string) {
 }
 
 export function profilePathFor(user: { username?: string | null; uid?: string | null; id: string }) {
-  return `/u/${user.username || user.uid || user.id}`;
+  // If username exists, use @username format for better shareability
+  if (user.username) {
+    return `/@${user.username}`;
+  }
+  // Otherwise fall back to /u/{uid or id}
+  return `/u/${user.uid || user.id}`;
 }
 
 export function usernameSeedFromName(nameOrEmail: string) {

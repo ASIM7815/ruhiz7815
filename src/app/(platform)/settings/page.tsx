@@ -2,13 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   User,
   Bell,
   Copy,
-  Check,
-  Upload,
   Loader2,
   Camera,
   Image as ImageIcon,
@@ -288,7 +286,6 @@ export default function SettingsPage() {
             title: "✨ Image Uploaded!",
             description: "Profile photo updated successfully.",
             className: "bg-green-500/10 border-green-500/50 text-green-500",
-            duration: 3000,
           });
           // Refresh the router to update all pages with new image
           router.refresh();
@@ -389,7 +386,6 @@ export default function SettingsPage() {
         title: "✨ Image Uploaded!",
         description: "Cover image updated successfully.",
         className: "bg-green-500/10 border-green-500/50 text-green-500",
-        duration: 3000,
       });
       // Refresh the router to update all pages with new cover image
       router.refresh();
@@ -970,7 +966,7 @@ export default function SettingsPage() {
                   <div className="text-center py-12 text-muted-foreground">
                     <CheckCircle2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No badges added yet</p>
-                    <p className="text-sm">Click "Add Badge" to create your first badge</p>
+                    <p className="text-sm">Click &ldquo;Add Badge&rdquo; to create your first badge</p>
                   </div>
                 ) : (
                   badges.map((badge, index) => (

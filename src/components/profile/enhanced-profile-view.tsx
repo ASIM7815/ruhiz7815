@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -72,13 +73,40 @@ const BADGE_COLOR_CLASSES: Record<string, string> = {
 };
 
 export function EnhancedProfileView({ profile, isOwner }: { profile: ProfileData; isOwner: boolean }) {
+  const router = useRouter();
   const [isFollowing, setIsFollowing] = useState(profile.isFollowing);
+  const [busy, setBusy] = useState(false);
   const badges = Array.isArray(profile.customBadges) ? profile.customBadges : [];
 
   const levelTitle = profile.level <= 10 ? "Beginner" : 
                     profile.level <= 25 ? "Builder" : 
                     profile.level <= 50 ? "Expert" :
                     profile.level <= 75 ? "Master" : "Legend";
+
+  async function handleFollowClick() {
+    // Check if user is authenticated by trying to follow
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/users/${profile.id}/follow`, {
+        method: isFollowing ? "DELETE" : "POST",
+      });
+
+      if (res.status === 401) {
+        // User not authenticated, redirect to login with current page
+        const currentUrl = window.location.pathname;
+        router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+        return;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        setIsFollowing(data.isFollowing);
+        router.refresh();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -273,11 +301,29 @@ export function EnhancedProfileView({ profile, isOwner }: { profile: ProfileData
                   </>
                 ) : (
                   <>
-                    <button className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 font-medium">
+                    <button 
+                      onClick={handleFollowClick}
+                      disabled={busy}
+                      className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                       <UserPlus className="w-4 h-4 inline mr-2" />
-                      {isFollowing ? "Following" : "Follow"}
+                      {busy ? "Loading..." : isFollowing ? "Following" : "Follow"}
                     </button>
-                    <button className="px-4 py-2 bg-card border border-border rounded-lg hover:border-purple-500">
+                    <button 
+                      onClick={() => {
+                        const url = profile.username 
+                          ? `${window.location.origin}/@${profile.username}`
+                          : window.location.href;
+                        if (navigator.share) {
+                          navigator.share({ title: profile.name, url });
+                        } else {
+                          navigator.clipboard.writeText(url);
+                          alert("Profile link copied!");
+                        }
+                      }}
+                      className="px-4 py-2 bg-card border border-border rounded-lg hover:border-purple-500"
+                      title="Share profile"
+                    >
                       <Share2 className="w-4 h-4" />
                     </button>
                     <button className="px-4 py-2 bg-card border border-border rounded-lg hover:border-purple-500">

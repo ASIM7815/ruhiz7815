@@ -29,6 +29,16 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
   },
+  
+  // Rewrite @username URLs to /u/username for profile sharing
+  async rewrites() {
+    return [
+      {
+        source: "/@:username",
+        destination: "/u/:username",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

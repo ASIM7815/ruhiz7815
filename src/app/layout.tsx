@@ -30,6 +30,11 @@ export const metadata: Metadata = {
     "startup",
     "marketplace",
   ],
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

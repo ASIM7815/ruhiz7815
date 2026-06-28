@@ -114,7 +114,7 @@ describe("ConnectionManager", () => {
       });
 
       // First failure
-      let connectPromise = manager.connect();
+      const connectPromise = manager.connect();
       currentMockChannel._subscribeCallback("CHANNEL_ERROR");
       await connectPromise;
 
@@ -142,7 +142,7 @@ describe("ConnectionManager", () => {
       });
 
       // First failure
-      let connectPromise = manager.connect();
+      const connectPromise = manager.connect();
       currentMockChannel._subscribeCallback("CHANNEL_ERROR");
       await connectPromise;
       expect(reconnectingStates[0].attempt).toBe(1);
@@ -160,7 +160,7 @@ describe("ConnectionManager", () => {
 
     it("should reset retry counter on successful connection", async () => {
       // First failure
-      let connectPromise = manager.connect();
+      const connectPromise = manager.connect();
       currentMockChannel._subscribeCallback("CHANNEL_ERROR");
       await connectPromise;
 

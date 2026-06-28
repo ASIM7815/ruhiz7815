@@ -60,7 +60,7 @@ export function validateString(
     };
   }
 
-  let str = trim ? value.trim() : value;
+  const str = trim ? value.trim() : value;
 
   if (required && !str) {
     return {

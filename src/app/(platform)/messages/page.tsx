@@ -490,6 +490,21 @@ function MessagesPageContent() {
     };
   }, [userId, fetchConversations]);
 
+  // ── Poll selected conversation as a fallback when Realtime is unavailable ──
+
+  useEffect(() => {
+    if (!userId || msgTab !== "chats" || !selectedConversation) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchMessages(selectedConversation);
+        fetch(`/api/messages/${selectedConversation}/read`, { method: "PATCH" });
+      }
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [fetchMessages, msgTab, selectedConversation, userId]);
+
   // ── Cleanup Realtime on unmount ────────────────────────────────
 
   useEffect(() => {

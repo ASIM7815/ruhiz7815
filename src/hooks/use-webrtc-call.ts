@@ -82,6 +82,15 @@ type VerifyCallResponse = {
 const CALL_RING_TIMEOUT_MS = 30_000;
 const SIGNAL_SUBSCRIBE_TIMEOUT_MS = 6_000;
 const SIGNAL_SEND_ERROR = "Realtime signaling message could not be delivered.";
+const WEBRTC_DEBUG = process.env.NODE_ENV !== "production";
+
+function debugLog(...args: unknown[]) {
+  if (WEBRTC_DEBUG) console.log(...args);
+}
+
+function debugWarn(...args: unknown[]) {
+  if (WEBRTC_DEBUG) console.warn(...args);
+}
 
 function hasAudioMediaSection(description: RTCSessionDescriptionInit) {
   return (
@@ -353,55 +362,59 @@ export function useWebRTCCall({
   );
 
   const getLocalMedia = useCallback(async (kind: CallKind, isAudioOnly = false) => {
+    debugLog("[WebRTC] Requesting local media:", kind, "isAudioOnly:", isAudioOnly);
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error("This browser does not support audio or video calls.");
     }
 
-    // Always request video for audio-only calls to ensure reliable audio track acquisition
-    const actualKind = isAudioOnly ? "video" : kind;
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        autoGainControl: true,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-      video:
-        actualKind === "video"
-          ? {
-              facingMode: "user",
-              height: { ideal: 720 },
-              width: { ideal: 1280 },
-            }
-          : false,
-    });
-    const audioTracks = stream.getAudioTracks();
-
-    if (audioTracks.length === 0) {
-      stream.getTracks().forEach((track) => track.stop());
-      throw new Error("No microphone track is available for this call.");
-    }
-
-    // If this is an audio-only call, immediately stop and disable video tracks
-    if (isAudioOnly) {
-      stream.getVideoTracks().forEach((track) => {
-        track.enabled = false;
-        track.stop();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+        video:
+          !isAudioOnly && kind === "video"
+            ? {
+                facingMode: "user",
+                height: { ideal: 720 },
+                width: { ideal: 1280 },
+              }
+            : false,
       });
+      const audioTracks = stream.getAudioTracks();
+      const videoTracks = stream.getVideoTracks();
+
+      debugLog("[WebRTC] Got media stream:", {
+        audioTracks: audioTracks.length,
+        videoTracks: videoTracks.length,
+      });
+
+      if (audioTracks.length === 0) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error("No microphone track is available for this call.");
+      }
+
+
+      setLocalStream(stream);
+      setMicEnabled(audioTracks.some((track) => track.enabled));
+      setCameraEnabled(isAudioOnly ? false : stream.getVideoTracks().some((track) => track.enabled));
+
+      stream.getTracks().forEach((track) => {
+        track.onended = () => {
+          debugLog("[WebRTC] Local track ended:", track.kind);
+          if (track.kind === "audio") setMicEnabled(false);
+          if (track.kind === "video") setCameraEnabled(false);
+        };
+      });
+
+      return stream;
+    } catch (error) {
+      console.error("[WebRTC] Failed to get local media:", error);
+      throw error;
     }
-
-    setLocalStream(stream);
-    setMicEnabled(audioTracks.some((track) => track.enabled));
-    setCameraEnabled(isAudioOnly ? false : stream.getVideoTracks().some((track) => track.enabled));
-
-    stream.getTracks().forEach((track) => {
-      track.onended = () => {
-        if (track.kind === "audio") setMicEnabled(false);
-        if (track.kind === "video") setCameraEnabled(false);
-      };
-    });
-
-    return stream;
   }, [setLocalStream]);
 
   const flushPendingIceCandidates = useCallback(async () => {
@@ -503,17 +516,24 @@ export function useWebRTCCall({
     const existing = peerConnectionRef.current;
     if (existing) return existing;
 
+    debugLog("[WebRTC] Creating peer connection with ICE servers:", iceServersRef.current);
+
     const pc = new RTCPeerConnection({
       iceCandidatePoolSize: 4,
       iceServers: iceServersRef.current,
     });
 
     localStreamRef.current?.getTracks().forEach((track) => {
+      debugLog("[WebRTC] Adding local track to peer connection:", track.kind, track.id);
       pc.addTrack(track, localStreamRef.current as MediaStream);
     });
 
     pc.onicecandidate = (event) => {
-      if (!event.candidate) return;
+      if (!event.candidate) {
+        debugLog("[WebRTC] ICE gathering complete");
+        return;
+      }
+      debugLog("[WebRTC] New ICE candidate:", event.candidate.type, event.candidate.protocol);
       const current = activeCallRef.current;
       if (!current) return;
       void sendToCallChannel({
@@ -523,13 +543,17 @@ export function useWebRTCCall({
       })
         .then((sent) => {
           if (!sent) {
+            console.error("[WebRTC] Failed to send ICE candidate");
             updateActiveCall((call) => ({
               ...call,
               error: "A network candidate could not be sent.",
             }));
+          } else {
+            debugLog("[WebRTC] ICE candidate sent successfully");
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error("[WebRTC] Error sending ICE candidate:", err);
           updateActiveCall((call) => ({
             ...call,
             error: "A network candidate could not be sent.",
@@ -537,23 +561,32 @@ export function useWebRTCCall({
         });
     };
 
+    pc.onicegatheringstatechange = () => {
+      debugLog("[WebRTC] ICE gathering state:", pc.iceGatheringState);
+    };
+
     pc.ontrack = (event) => {
+      debugLog("[WebRTC] Remote track received:", event.track.kind, event.track.id);
       appendRemoteTrack(event);
     };
 
     pc.onconnectionstatechange = () => {
+      debugLog("[WebRTC] Connection state:", pc.connectionState);
       const current = activeCallRef.current;
       if (!current) return;
 
       if (pc.connectionState === "connected") {
+        debugLog("[WebRTC] Peer connection established successfully");
         markCallConnected();
       }
 
       if (pc.connectionState === "disconnected") {
+        debugWarn("[WebRTC] Peer connection disconnected, attempting to reconnect");
         updateActiveCall((call) => ({ ...call, status: "reconnecting" }));
       }
 
       if (pc.connectionState === "failed") {
+        console.error("[WebRTC] Peer connection failed");
         updateActiveCall((call) => ({
           ...call,
           error: "The peer connection failed.",
@@ -565,12 +598,24 @@ export function useWebRTCCall({
     };
 
     pc.oniceconnectionstatechange = () => {
+      debugLog("[WebRTC] ICE connection state:", pc.iceConnectionState);
       if (
         pc.iceConnectionState === "connected" ||
         pc.iceConnectionState === "completed"
       ) {
+        debugLog("[WebRTC] ICE connection established");
         markCallConnected();
       }
+      if (pc.iceConnectionState === "failed") {
+        console.error("[WebRTC] ICE connection failed");
+      }
+      if (pc.iceConnectionState === "disconnected") {
+        debugWarn("[WebRTC] ICE connection disconnected");
+      }
+    };
+
+    pc.onsignalingstatechange = () => {
+      debugLog("[WebRTC] Signaling state:", pc.signalingState);
     };
 
     peerConnectionRef.current = pc;
@@ -588,17 +633,23 @@ export function useWebRTCCall({
     const current = activeCallRef.current;
     if (!current) return;
 
+    debugLog("[WebRTC] Creating and sending offer for call:", current.callId);
+
     try {
       const pc = createPeerConnection();
       ensureAudioSender(pc);
+      
+      debugLog("[WebRTC] Creating offer...");
       const offer = await pc.createOffer();
 
       if (!hasAudioMediaSection(offer)) {
         throw new Error("The call offer did not include an audio channel.");
       }
 
+      debugLog("[WebRTC] Setting local description...");
       await pc.setLocalDescription(offer);
 
+      debugLog("[WebRTC] Sending offer to peer...");
       const offerSent = await sendToCallChannel({
         callId: current.callId,
         description: offer,
@@ -608,7 +659,10 @@ export function useWebRTCCall({
       if (!offerSent) {
         throw new Error(SIGNAL_SEND_ERROR);
       }
+
+      debugLog("[WebRTC] Offer sent successfully");
     } catch (error) {
+      console.error("[WebRTC] Failed to create/send offer:", error);
       const message = getCallSetupErrorMessage(error);
       updateActiveCall((call) => ({
         ...call,
@@ -632,6 +686,8 @@ export function useWebRTCCall({
       const current = activeCallRef.current;
       if (!current) return;
 
+      debugLog("[WebRTC] Received offer for call:", current.callId);
+
       try {
         if (!hasAudioMediaSection(signal.description)) {
           throw new Error("The incoming call offer did not include audio.");
@@ -639,14 +695,21 @@ export function useWebRTCCall({
 
         const pc = createPeerConnection();
         ensureAudioSender(pc);
+        
+        debugLog("[WebRTC] Setting remote description from offer...");
         await pc.setRemoteDescription(signal.description);
+        
+        debugLog("[WebRTC] Flushing pending ICE candidates...");
         await flushPendingIceCandidates();
+        
+        debugLog("[WebRTC] Creating answer...");
         const answer = await pc.createAnswer();
 
         if (!hasAudioMediaSection(answer)) {
           throw new Error("The call answer did not include an audio channel.");
         }
 
+        debugLog("[WebRTC] Setting local description from answer...");
         await pc.setLocalDescription(answer);
         updateActiveCall((call) => ({
           ...call,
@@ -654,6 +717,7 @@ export function useWebRTCCall({
           status: call.status === "incoming" ? "connecting" : call.status,
         }));
 
+        debugLog("[WebRTC] Sending answer to peer...");
         const answerSent = await sendToCallChannel({
           callId: current.callId,
           description: answer,
@@ -664,8 +728,10 @@ export function useWebRTCCall({
           throw new Error(SIGNAL_SEND_ERROR);
         }
 
+        debugLog("[WebRTC] Answer sent successfully");
         markCallConnected();
       } catch (error) {
+        console.error("[WebRTC] Failed to handle offer:", error);
         const message = getCallSetupErrorMessage(error);
         updateActiveCall((call) => ({
           ...call,
@@ -693,20 +759,29 @@ export function useWebRTCCall({
       const pc = peerConnectionRef.current;
       if (!pc) return;
 
+      debugLog("[WebRTC] Received answer for call");
+
       try {
         if (!hasAudioMediaSection(signal.description)) {
           throw new Error("The call answer did not include audio.");
         }
 
+        debugLog("[WebRTC] Setting remote description from answer...");
         await pc.setRemoteDescription(signal.description);
+        
+        debugLog("[WebRTC] Flushing pending ICE candidates...");
         await flushPendingIceCandidates();
+        
         updateActiveCall((call) => ({
           ...call,
           error: null,
           status: "connecting",
         }));
+        
+        debugLog("[WebRTC] Answer processed successfully");
         markCallConnected();
       } catch (error) {
+        console.error("[WebRTC] Failed to handle answer:", error);
         const current = activeCallRef.current;
         const message = getCallSetupErrorMessage(error);
         updateActiveCall((call) => ({
@@ -734,19 +809,26 @@ export function useWebRTCCall({
       const pc = peerConnectionRef.current;
       if (!signal.candidate) return;
 
+      debugLog("[WebRTC] Received ICE candidate from peer");
+
       if (!pc) {
+        debugLog("[WebRTC] Peer connection not ready, buffering ICE candidate");
         pendingIceCandidatesRef.current.push(signal.candidate);
         return;
       }
 
       if (!pc.remoteDescription) {
+        debugLog("[WebRTC] Remote description not set, buffering ICE candidate");
         pendingIceCandidatesRef.current.push(signal.candidate);
         return;
       }
 
       try {
+        debugLog("[WebRTC] Adding ICE candidate to peer connection");
         await pc.addIceCandidate(signal.candidate);
-      } catch {
+        debugLog("[WebRTC] ICE candidate added successfully");
+      } catch (error) {
+        console.error("[WebRTC] Failed to add ICE candidate:", error);
         updateActiveCall((call) => ({
           ...call,
           error: "A network candidate could not be added.",
@@ -762,7 +844,10 @@ export function useWebRTCCall({
       const current = activeCallRef.current;
       if (!current || envelope.callId !== current.callId) return;
 
+      debugLog("[WebRTC] Received call signal:", envelope.type);
+
       if (envelope.type === "accept" && current.direction === "outgoing") {
+        debugLog("[WebRTC] Peer accepted the call");
         clearRingTimeout();
         updateActiveCall((call) => ({ ...call, error: null, status: "connecting" }));
         await createAndSendOffer();
@@ -770,6 +855,7 @@ export function useWebRTCCall({
       }
 
       if (envelope.type === "reject" || envelope.type === "busy") {
+        debugLog("[WebRTC] Call rejected/busy:", envelope.type);
         clearRingTimeout();
         updateActiveCall((call) => ({
           ...call,
@@ -781,11 +867,13 @@ export function useWebRTCCall({
       }
 
       if (envelope.type === "cancel") {
+        debugLog("[WebRTC] Call cancelled by peer");
         cleanupCall();
         return;
       }
 
       if (envelope.type === "end") {
+        debugLog("[WebRTC] Call ended by peer");
         updateActiveCall((call) => ({ ...call, status: "ended" }));
         cleanupCall(900);
         return;
@@ -840,8 +928,16 @@ export function useWebRTCCall({
     async (envelope: SignalEnvelope) => {
       if (!currentUser?.id || envelope.type !== "invite") return;
 
+      debugLog("[WebRTC] Received incoming call invite:", {
+        callId: envelope.callId,
+        from: envelope.caller.name,
+        kind: envelope.kind,
+        isAudioOnly: envelope.isAudioOnly,
+      });
+
       const current = activeCallRef.current;
       if (current && current.status !== "ended") {
+        debugLog("[WebRTC] Already in a call, sending busy signal");
         await sendToTemporaryCallChannel(envelope.callId, {
           callId: envelope.callId,
           conversationId: envelope.conversationId,
@@ -851,6 +947,7 @@ export function useWebRTCCall({
       }
 
       try {
+        debugLog("[WebRTC] Verifying call...");
         const res = await fetch("/api/messages/calls/verify", {
           body: JSON.stringify({
             callerId: envelope.caller.id,
@@ -862,10 +959,15 @@ export function useWebRTCCall({
           method: "POST",
         });
 
-        if (!res.ok) return;
+        if (!res.ok) {
+          debugLog("[WebRTC] Call verification failed");
+          return;
+        }
 
         const data = (await res.json()) as VerifyCallResponse;
         iceServersRef.current = data.iceServers;
+        
+        debugLog("[WebRTC] Call verified, ICE servers configured:", data.iceServers);
 
         setActiveCall({
           callId: data.callId,
@@ -880,13 +982,17 @@ export function useWebRTCCall({
           status: "incoming",
         });
 
+        debugLog("[WebRTC] Incoming call ready, waiting for user to accept");
+
         ringTimeoutRef.current = window.setTimeout(() => {
           const latest = activeCallRef.current;
           if (latest?.callId === data.callId && latest.status === "incoming") {
+            debugLog("[WebRTC] Incoming call timeout");
             cleanupCall();
           }
         }, CALL_RING_TIMEOUT_MS);
-      } catch {
+      } catch (error) {
+        console.error("[WebRTC] Failed to handle incoming invite:", error);
         // Ignore invalid or stale invites.
       }
     },
@@ -898,12 +1004,13 @@ export function useWebRTCCall({
       if (!currentUser?.id || !peer) return;
       if (activeCallRef.current) return;
 
-      // Track if this is an audio-only call (user clicked "Audio Call" button)
+      debugLog("[WebRTC] Starting call:", { conversationId, peer: peer.id, kind });
+
       const isAudioOnly = kind === "audio";
-      // Always use "video" for backend to ensure reliable audio track acquisition
-      const backendKind: CallKind = "video";
+      const backendKind = kind;
 
       try {
+        debugLog("[WebRTC] Requesting call from server...");
         const res = await fetch("/api/messages/calls", {
           body: JSON.stringify({ conversationId, kind: backendKind }),
           headers: { "Content-Type": "application/json" },
@@ -916,8 +1023,11 @@ export function useWebRTCCall({
 
         const data = (await res.json()) as CreateCallResponse;
         iceServersRef.current = data.iceServers;
+        
+        debugLog("[WebRTC] Call created, ICE servers configured:", data.iceServers);
 
-        // Get media with video enabled (even for audio-only calls)
+        // Request only the media needed for the selected call type.
+        debugLog("[WebRTC] Getting local media...");
         await getLocalMedia(backendKind, isAudioOnly);
 
         const call: ActiveCall = {
@@ -934,8 +1044,10 @@ export function useWebRTCCall({
         };
 
         setActiveCall(call);
+        debugLog("[WebRTC] Joining call channel...");
         await joinCallChannel(data.callId);
 
+        debugLog("[WebRTC] Sending invite to peer...");
         const inviteSent = await sendToUserChannel(data.peer.id, {
           callId: data.callId,
           caller: {
@@ -953,9 +1065,12 @@ export function useWebRTCCall({
           throw new Error(SIGNAL_SEND_ERROR);
         }
 
+        debugLog("[WebRTC] Invite sent, waiting for peer to accept...");
+
         ringTimeoutRef.current = window.setTimeout(() => {
           const latest = activeCallRef.current;
           if (latest?.callId === data.callId && latest.status === "ringing") {
+            debugLog("[WebRTC] Call timeout - no answer");
             void sendToUserChannel(data.peer.id, {
               callId: data.callId,
               conversationId,
@@ -971,6 +1086,7 @@ export function useWebRTCCall({
           }
         }, CALL_RING_TIMEOUT_MS);
       } catch (error) {
+        console.error("[WebRTC] Failed to start call:", error);
         stopMedia();
         setActiveCall({
           callId: crypto.randomUUID(),
@@ -1009,21 +1125,34 @@ export function useWebRTCCall({
     const current = activeCallRef.current;
     if (!current || current.direction !== "incoming") return;
 
+    debugLog("[WebRTC] Accepting incoming call:", current.callId);
+
     try {
       clearRingTimeout();
+      
+      debugLog("[WebRTC] Getting local media for incoming call...");
       // Get media with the isAudioOnly flag
       await getLocalMedia(current.kind, current.isAudioOnly);
+      
+      debugLog("[WebRTC] Joining call channel...");
       await joinCallChannel(current.callId);
+      
       updateActiveCall((call) => ({ ...call, error: null, status: "connecting" }));
+      
+      debugLog("[WebRTC] Sending accept signal to caller...");
       const acceptSent = await sendToCallChannel({
         callId: current.callId,
         conversationId: current.conversationId,
         type: "accept",
       });
+      
       if (!acceptSent) {
         throw new Error(SIGNAL_SEND_ERROR);
       }
+      
+      debugLog("[WebRTC] Call accepted, waiting for offer...");
     } catch (error) {
+      console.error("[WebRTC] Failed to accept call:", error);
       updateActiveCall((call) => ({
         ...call,
         error:

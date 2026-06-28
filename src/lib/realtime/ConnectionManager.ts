@@ -55,8 +55,12 @@ export class ConnectionManager {
    */
   onStateChange(callback: StateChangeCallback): Unsubscribe {
     this.stateChangeCallbacks.add(callback);
-    // Immediately call with current state
-    callback(this.state);
+    // Immediately call with current state, but keep one bad subscriber from breaking others.
+    try {
+      callback(this.state);
+    } catch (error) {
+      console.error("Error in state change callback:", error);
+    }
     
     return () => {
       this.stateChangeCallbacks.delete(callback);
@@ -88,6 +92,11 @@ export class ConnectionManager {
     }
 
     try {
+      if (this.channel) {
+        supabase.removeChannel(this.channel);
+        this.channel = null;
+      }
+
       // Create a channel for health monitoring
       this.channel = supabase.channel("connection-health");
       
@@ -196,9 +205,23 @@ export class ConnectionManager {
    * Attempt reconnection with exponential backoff
    */
   private attemptReconnection(): void {
-    // Check if we've exceeded max retry attempts
+    this.currentRetryAttempt++;
+
+    const backoffIndex = Math.min(
+      this.currentRetryAttempt - 1,
+      this.backoffIntervals.length - 1
+    );
+    const retryDelay = this.backoffIntervals[backoffIndex];
+
+    this.setState({
+      status: "reconnecting",
+      attempt: this.currentRetryAttempt,
+      nextRetryIn: retryDelay,
+    });
+
+    // Count the initial failure as one retry attempt. Emit the final
+    // reconnecting state first so UI can show the last attempted delay.
     if (this.currentRetryAttempt >= this.maxRetryAttempts) {
-      // Enable manual reconnect option
       this.manualReconnectAvailable = true;
       this.setState({
         status: "error",
@@ -209,30 +232,10 @@ export class ConnectionManager {
       return;
     }
 
-    // Get the backoff interval for the current attempt
-    // Use the last interval (16s) if we exceed the array length
-    const backoffIndex = Math.min(
-      this.currentRetryAttempt,
-      this.backoffIntervals.length - 1
-    );
-    const retryDelay = this.backoffIntervals[backoffIndex];
-
-    // Update state to show reconnecting
-    this.setState({
-      status: "reconnecting",
-      attempt: this.currentRetryAttempt + 1,
-      nextRetryIn: retryDelay,
-    });
-
-    // Schedule reconnection attempt
     this.reconnectTimer = setTimeout(async () => {
-      this.currentRetryAttempt++;
-      
       try {
         await this.connect();
       } catch (error) {
-        // If connection fails, attemptReconnection will be called again
-        // from handleConnectionError
         console.error("Reconnection attempt failed:", error);
       }
     }, retryDelay);
@@ -279,8 +282,8 @@ export class ConnectionManager {
       window.removeEventListener("offline", this.handleOffline);
     }
     
-    this.disconnect();
     this.stateChangeCallbacks.clear();
+    this.disconnect();
   }
 }
 

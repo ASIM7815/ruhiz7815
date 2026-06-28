@@ -1,50 +1,42 @@
-// Script to verify GCS environment variables are correctly formatted
-// Run this locally: node verify-gcs-env.js
+// Script to verify storage environment variables for Cloudflare R2 uploads.
+// Run locally: node verify-gcs-env.js
 
-require('dotenv').config({ path: '.env.local' });
+async function main() {
+  const { config } = await import("dotenv");
+  config({ path: ".env.local" });
 
-console.log('=== GCS Environment Variables Check ===\n');
+  console.log("=== R2 Storage Environment Variables Check ===\n");
 
-// Check if variables exist
-const bucketName = process.env.GCS_BUCKET_NAME;
-const credentials = process.env.GCS_CREDENTIALS;
+  const required = [
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+  ];
 
-console.log('1. GCS_BUCKET_NAME:', bucketName ? '✓ Set' : '✗ Missing');
-console.log('   Value:', bucketName || 'N/A');
+  for (const name of required) {
+    const value = process.env[name];
+    console.log(`${name}: ${value ? "Set" : "Missing"}`);
 
-console.log('\n2. GCS_CREDENTIALS:', credentials ? '✓ Set' : '✗ Missing');
-
-if (credentials) {
-  console.log('   Length:', credentials.length, 'characters');
-  
-  // Try to parse JSON
-  try {
-    const parsed = JSON.parse(credentials);
-    console.log('   ✓ Valid JSON');
-    console.log('   Project ID:', parsed.project_id);
-    console.log('   Client Email:', parsed.client_email);
-    console.log('   Has Private Key:', parsed.private_key ? '✓ Yes' : '✗ No');
-    
-    if (parsed.private_key) {
-      const hasBegin = parsed.private_key.includes('-----BEGIN PRIVATE KEY-----');
-      const hasEnd = parsed.private_key.includes('-----END PRIVATE KEY-----');
-      const hasNewlines = parsed.private_key.includes('\\n');
-      
-      console.log('   Private Key Format:');
-      console.log('     - Has BEGIN marker:', hasBegin ? '✓' : '✗');
-      console.log('     - Has END marker:', hasEnd ? '✓' : '✗');
-      console.log('     - Has \\n characters:', hasNewlines ? '✓' : '✗');
+    if (value && name !== "R2_SECRET_ACCESS_KEY") {
+      console.log("  Value:", value);
     }
-    
-    console.log('\n✓ Configuration looks good!');
-  } catch (error) {
-    console.log('   ✗ Invalid JSON');
-    console.log('   Error:', error.message);
-    console.log('\n   First 100 characters:');
-    console.log('   ', credentials.substring(0, 100));
   }
-} else {
-  console.log('   ✗ Not set - will try to use googlebucket.json file');
+
+  const bucketName = process.env.R2_BUCKET_NAME || "ruhiz";
+  console.log(`R2_BUCKET_NAME: ${bucketName}`);
+
+  const missing = required.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    console.log("\nMissing required variables:", missing.join(", "));
+    process.exitCode = 1;
+  } else {
+    console.log("\nConfiguration looks ready for /api/upload and /api/r2 routes.");
+  }
+
+  console.log("\n=== End Check ===");
 }
 
-console.log('\n=== End Check ===');
+main().catch((error) => {
+  console.error("Failed to verify R2 env:", error);
+  process.exitCode = 1;
+});

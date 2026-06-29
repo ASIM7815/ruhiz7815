@@ -73,7 +73,7 @@ export async function PATCH(
   if (action === "reject") {
     await db.joinRequest.update({
       where: { id: requestId },
-      data: { status: "REJECTED" },
+      data: { status: "REJECTED", reviewedAt: new Date(), reviewedBy: user.id },
     });
     await db.notification.create({
       data: {
@@ -81,6 +81,7 @@ export async function PATCH(
         type: "PROJECT_REJECTED",
         title: "Project request declined",
         message: `Your request to join ${project.title} was declined.`,
+        data: { projectId, requestId },
       },
     });
     return NextResponse.json({ success: true, status: "REJECTED" });
@@ -90,26 +91,17 @@ export async function PATCH(
     return NextResponse.json({ error: "This project team is already full" }, { status: 409 });
   }
 
-  // Accept: add as member + handle group creation
+  // Accept: add as member, create/sync the project group, then notify the requester.
   await db.$transaction(async (tx) => {
     await tx.joinRequest.update({
       where: { id: requestId },
-      data: { status: "ACCEPTED" },
+      data: { status: "ACCEPTED", reviewedAt: new Date(), reviewedBy: user.id },
     });
 
     await tx.projectMember.upsert({
       where: { projectId_userId: { projectId, userId: joinRequest.userId } },
       update: { role: "MEMBER" },
       create: { projectId, userId: joinRequest.userId, role: "MEMBER" },
-    });
-
-    await tx.notification.create({
-      data: {
-        userId: joinRequest.userId,
-        type: "PROJECT_ACCEPTED",
-        title: "Project request approved",
-        message: `You joined ${project.title}. A group chat is ready in Messages.`,
-      },
     });
   });
 
@@ -118,6 +110,16 @@ export async function PATCH(
     projectTitle: project.title,
     ownerId: project.ownerId,
     memberId: joinRequest.userId,
+  });
+
+  await db.notification.create({
+    data: {
+      userId: joinRequest.userId,
+      type: "PROJECT_ACCEPTED",
+      title: "Project request approved",
+      message: `Your request to join ${project.title} was approved. A group was created for your team and you can open it from the Messages tab.`,
+      data: { projectId, requestId, groupConversationId },
+    },
   });
 
   return NextResponse.json({

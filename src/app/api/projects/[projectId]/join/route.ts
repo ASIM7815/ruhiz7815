@@ -95,6 +95,7 @@ export async function POST(
           type: "PROJECT_JOIN_REQUEST",
           title: "New project join request",
           message: `${user.name} asked to join ${project.title}.`,
+          data: { projectId, requestId: request.id, requesterId: user.id },
         },
       });
 
@@ -116,6 +117,7 @@ export async function POST(
       type: "PROJECT_JOIN_REQUEST",
       title: "New project join request",
       message: `${user.name} asked to join ${project.title}.`,
+      data: { projectId, requestId: request.id, requesterId: user.id },
     },
   });
 

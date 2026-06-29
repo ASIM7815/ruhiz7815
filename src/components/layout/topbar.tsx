@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabaseUser } from "@/hooks/use-supabase-user";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useRouter } from "next/navigation";
@@ -30,6 +30,7 @@ export function Topbar() {
   const [searching, setSearching] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   // Use database user data if available (for real-time sync), fallback to Supabase
   const userImage = dbUser?.image || supabaseUser?.user_metadata?.avatar_url || undefined;
@@ -65,6 +66,35 @@ export function Topbar() {
       setSearchResult(null);
     }
   }
+
+  useEffect(() => {
+    if (!supabaseUser?.id) {
+      setUnreadNotifications(0);
+      return;
+    }
+
+    let cancelled = false;
+    async function loadUnreadCount() {
+      try {
+        const res = await fetch("/api/notifications/unread-count", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setUnreadNotifications(data.count || 0);
+      } catch {
+        // A missing badge should not interrupt navigation.
+      }
+    }
+
+    loadUnreadCount();
+    const intervalId = window.setInterval(loadUnreadCount, 15000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [supabaseUser?.id]);
 
   const searchBox = (
     <div className="relative">
@@ -168,7 +198,11 @@ export function Topbar() {
             render={<Link href="/notifications" />}
           >
             <Bell className="h-4 w-4" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
+            {unreadNotifications > 0 && (
+              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-none text-primary-foreground">
+                {unreadNotifications > 9 ? "9+" : unreadNotifications}
+              </span>
+            )}
           </Button>
           <Link href="/profile" className="rounded-full">
             <Avatar className="h-8 w-8">

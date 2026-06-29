@@ -31,6 +31,9 @@ import {
   Lock,
   Unlock,
   Loader2,
+  Camera,
+  Pencil,
+  Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -57,6 +60,7 @@ interface GroupMember {
 interface GroupConvDetails {
   id: string;
   name: string;
+  image_url: string | null;
   type: string;
   entity_id: string;
   myRole: string;
@@ -123,12 +127,18 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [memberCount, setMemberCount] = useState(0);
   const [showMembers, setShowMembers] = useState(false);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [groupNameInput, setGroupNameInput] = useState("");
+  const [groupImageUrl, setGroupImageUrl] = useState<string | null>(null);
+  const [updatingGroup, setUpdatingGroup] = useState(false);
+  const [groupSettingsError, setGroupSettingsError] = useState("");
   const [sending, setSending] = useState(false);
   const [userNames, setUserNames] = useState<Record<string, { name: string; image: string | null }>>({});
   const [uploadingFile, setUploadingFile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<GroupMessage[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const groupImageInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -165,6 +175,12 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
       .then(setGroup)
       .catch(console.error);
   }, [groupId]);
+
+  useEffect(() => {
+    if (!group) return;
+    setGroupNameInput(group.name);
+    setGroupImageUrl(group.image_url);
+  }, [group]);
 
   // Load messages
   useEffect(() => {
@@ -330,6 +346,74 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
     }
   }
 
+  async function handleGroupImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUpdatingGroup(true);
+    setGroupSettingsError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "groupChat");
+      formData.append("entityId", groupId);
+
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        setGroupSettingsError(err.error || "Group photo upload failed.");
+        return;
+      }
+
+      const data = await uploadRes.json();
+      setGroupImageUrl(data.url);
+    } catch {
+      setGroupSettingsError("Group photo upload failed.");
+    } finally {
+      setUpdatingGroup(false);
+      if (groupImageInputRef.current) groupImageInputRef.current.value = "";
+    }
+  }
+
+  async function handleSaveGroupSettings() {
+    if (!group) return;
+    const name = groupNameInput.trim();
+    if (!name) {
+      setGroupSettingsError("Group name is required.");
+      return;
+    }
+
+    setUpdatingGroup(true);
+    setGroupSettingsError("");
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, image_url: groupImageUrl }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setGroupSettingsError(err.error || "Could not update group.");
+        return;
+      }
+
+      setGroup((current) =>
+        current ? { ...current, name, image_url: groupImageUrl } : current
+      );
+      setShowGroupSettings(false);
+      toast.success("Group updated.");
+    } catch {
+      setGroupSettingsError("Could not update group.");
+    } finally {
+      setUpdatingGroup(false);
+    }
+  }
+
   async function handleLeaveGroup() {
     if (!confirm("Are you sure you want to leave this group?")) return;
     const res = await fetch(`/api/groups/${groupId}/leave`, { method: "POST" });
@@ -394,11 +478,100 @@ export function GroupChat({ groupId, onBack }: GroupChatProps) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold truncate">{group?.name || "Group"}</h3>
+        <Avatar className="h-10 w-10 shrink-0">
+          <AvatarImage src={group?.image_url || undefined} />
+          <AvatarFallback className="bg-primary/10 text-primary">
+            <Users className="h-4 w-4" />
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-semibold">{group?.name || "Group"}</h3>
           <p className="text-xs text-muted-foreground">{memberCount} members</p>
         </div>
         <div className="flex gap-1">
+          {isAdmin && (
+            <Dialog
+              open={showGroupSettings}
+              onOpenChange={(open) => {
+                setShowGroupSettings(open);
+                if (open && group) {
+                  setGroupNameInput(group.name);
+                  setGroupImageUrl(group.image_url);
+                  setGroupSettingsError("");
+                }
+              }}
+            >
+              <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
+                <Pencil className="h-4 w-4" />
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Group Settings</DialogTitle>
+                  <DialogDescription>
+                    Update the team group name and photo.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      <AvatarImage src={groupImageUrl || undefined} />
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        <Users className="h-6 w-6" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="space-y-2">
+                      <input
+                        ref={groupImageInputRef}
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleGroupImageUpload}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => groupImageInputRef.current?.click()}
+                        disabled={updatingGroup}
+                      >
+                        <Camera className="mr-2 h-4 w-4" />
+                        Change Photo
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        JPG, PNG, GIF, or WebP up to 10MB.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium" htmlFor="group-name">
+                      Group name
+                    </label>
+                    <Input
+                      id="group-name"
+                      value={groupNameInput}
+                      onChange={(e) => setGroupNameInput(e.target.value)}
+                      maxLength={100}
+                    />
+                  </div>
+                  {groupSettingsError && (
+                    <p className="text-sm text-destructive">{groupSettingsError}</p>
+                  )}
+                  <Button
+                    className="w-full"
+                    onClick={handleSaveGroupSettings}
+                    disabled={updatingGroup}
+                  >
+                    {updatingGroup ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save Group
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
           <Dialog open={showMembers} onOpenChange={setShowMembers}>
             <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
               <Users className="h-4 w-4" />
